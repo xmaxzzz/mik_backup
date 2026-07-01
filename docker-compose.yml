@@ -8,8 +8,26 @@ services:
       - .env
     environment:
       DATA_DIR: /data
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     volumes:
       # persists SQLite DB and backup files across rebuilds
       - ./data:/data
+
+  caddy:
+    image: caddy:2
+    container_name: mik-backup-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:
+  caddy_config:

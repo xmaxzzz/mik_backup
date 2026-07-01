@@ -8,8 +8,8 @@ Telegram.
 
 - **Backend:** FastAPI (Python 3.12) + SQLite + APScheduler
 - **Frontend:** React SPA (Vite), served by the backend
-- **Packaging:** single Docker image, `docker compose up`
-- **Security:** JWT auth, device credentials + tokens encrypted at rest with Fernet
+- **Packaging:** Docker Compose — app + a **Caddy** reverse proxy terminating TLS
+- **Security:** JWT auth, device credentials + tokens encrypted at rest with Fernet; app port is not published — only Caddy (80/443) is exposed to the host
 
 ---
 
@@ -45,17 +45,48 @@ python3 -c "from cryptography.fernet import Fernet; print('ENCRYPTION_KEY='+Fern
 python3 -c "import secrets; print('ADMIN_PASSWORD='+secrets.token_urlsafe(12))"
 #    also set SERVER_IP=<this server's LAN/VPN IP> so the SSH-key helper script is ready to paste
 
-# 3. build & run
+# 3. edit the Caddyfile if your server's IP differs from 192.168.200.121
+
+# 4. build & run
 docker compose up -d --build
 ```
 
-Then open <http://SERVER_IP:8000>, sign in as `admin` with the `ADMIN_PASSWORD`
-you generated, and set a new password when prompted.
+Then open **<https://SERVER_IP>** (Caddy, port 443 — not `:8000`), sign in as
+`admin` with the `ADMIN_PASSWORD` you generated, and set a new password when
+prompted.
+
+The app container's port 8000 is **not published to the host** (`expose`,
+not `ports`) — it is reachable only from the `caddy` container over the
+internal Compose network. All traffic in must go through Caddy.
+
+### TLS certificate
+
+Caddy is configured with `tls internal`: it mints its own local CA and issues
+itself a certificate for the server's IP — no public DNS or ACME challenge
+needed, which fits a LAN-only deployment. Browsers will show an untrusted-cert
+warning until you trust that CA. Either accept the warning (fine for LAN admin
+use), or install Caddy's root certificate on your client — it's inside the
+`caddy_data` volume:
+
+```bash
+ssh mik-backup 'docker compose exec caddy cat /data/caddy/pki/authorities/local/root.crt'
+```
+
+Save that as a `.crt` file and import it into your OS/browser trust store.
+
+> **Why the Caddyfile has a `default_sni` global option.** Browsers (and
+> curl/most TLS clients) don't send the SNI extension when the URL host is a
+> bare IP address (RFC 6066) — SNI exists to disambiguate hostnames, and an IP
+> literal doesn't need it. Without `default_sni 192.168.200.121`, Caddy has no
+> certificate to offer on those SNI-less connections and the TLS handshake
+> fails outright. `default_sni` tells Caddy which certificate to fall back to
+> in that case. If you change the server's IP, update it in both the site
+> blocks and this global option.
 
 Health check:
 
 ```bash
-curl -s localhost:8000/api/health
+curl -sk https://SERVER_IP/api/health
 # {"status":"ok","app":"Mikrotik Backup"}
 ```
 

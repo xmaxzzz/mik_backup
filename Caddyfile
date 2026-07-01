@@ -1,0 +1,16 @@
+{
+    # Browsers/clients don't send SNI when the URL host is a bare IP literal
+    # (RFC 6066) — this tells Caddy which certificate to serve for those
+    # SNI-less connections, which is otherwise all of them on this LAN box.
+    default_sni 192.168.200.121
+}
+
+https://192.168.200.121 {
+    tls internal
+    encode zstd gzip
+    reverse_proxy app:8000
+}
+
+http://192.168.200.121 {
+    redir https://{host}{uri} permanent
+}
