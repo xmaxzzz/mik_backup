@@ -35,10 +35,17 @@ class Settings(BaseSettings):
     # --- storage ---
     data_dir: Path = DATA_DIR
 
-    # --- backup scheduler ---
-    backup_interval_hours: int = 24
+    # --- backups ---
     backup_retention: int = 30  # keep N most recent backups per device
+    default_ssh_port: int = 10322  # default SSH port for new/imported devices
     scheduler_enabled: bool = True
+
+    # --- availability checks ---
+    availability_interval_sec: int = 60  # TCP reachability poll interval
+
+    # --- ssh-key onboarding hints ---
+    # LAN/VPN address of THIS server that routers connect back to (used in ready_rsc)
+    server_ip: str = ""
 
     @property
     def db_path(self) -> Path:
@@ -47,6 +54,10 @@ class Settings(BaseSettings):
     @property
     def backups_dir(self) -> Path:
         return self.data_dir / "backups"
+
+    @property
+    def ssh_dir(self) -> Path:
+        return self.data_dir / "ssh"
 
     @property
     def database_url(self) -> str:
@@ -58,4 +69,5 @@ def get_settings() -> Settings:
     settings = Settings()  # type: ignore[call-arg]
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.backups_dir.mkdir(parents=True, exist_ok=True)
+    settings.ssh_dir.mkdir(parents=True, exist_ok=True)
     return settings

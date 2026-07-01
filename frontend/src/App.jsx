@@ -1,17 +1,15 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { api, ApiError, downloadBackup, getToken, setToken } from "./api.js";
+import { api, ApiError, getToken, setToken } from "./api.js";
+import { Modal } from "./ui.jsx";
+import Devices from "./Devices.jsx";
+import Schedules from "./Schedules.jsx";
+import Settings from "./Settings.jsx";
 
-function fmtDate(iso) {
-  if (!iso) return "—";
-  const d = new Date(iso.endsWith("Z") ? iso : iso + "Z");
-  return d.toLocaleString();
-}
-
-function fmtSize(n) {
-  if (!n) return "0 B";
-  const kb = n / 1024;
-  return kb < 1024 ? `${kb.toFixed(1)} KB` : `${(kb / 1024).toFixed(1)} MB`;
-}
+const TABS = [
+  { key: "devices", label: "Устройства" },
+  { key: "schedules", label: "Расписания" },
+  { key: "settings", label: "Настройки" },
+];
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -44,7 +42,7 @@ export default function App() {
       setToken(res.access_token);
       setUser(await api.me());
     } catch (err) {
-      setAuthError(err instanceof ApiError ? err.message : "Login failed");
+      setAuthError(err instanceof ApiError ? err.message : "Ошибка входа");
     }
   }
 
@@ -53,13 +51,12 @@ export default function App() {
     setUser(null);
   }
 
-  if (booting) return <div className="center muted">Loading…</div>;
-
+  if (booting) return <div className="center muted">Загрузка…</div>;
   if (!user) return <Login onLogin={handleLogin} error={authError} />;
 
   if (user.must_change_password) {
     return (
-      <Shell user={user} onLogout={handleLogout}>
+      <Shell user={user} onLogout={handleLogout} tab={null} onTab={() => {}}>
         <ChangePassword
           forced
           onDone={() => setUser({ ...user, must_change_password: false })}
@@ -67,15 +64,21 @@ export default function App() {
       </Shell>
     );
   }
+  return <MainApp user={user} onLogout={handleLogout} />;
+}
 
+function MainApp({ user, onLogout }) {
+  const [tab, setTab] = useState("devices");
   return (
-    <Shell user={user} onLogout={handleLogout}>
-      <Dashboard />
+    <Shell user={user} onLogout={onLogout} tab={tab} onTab={setTab}>
+      {tab === "devices" && <Devices />}
+      {tab === "schedules" && <Schedules />}
+      {tab === "settings" && <Settings />}
     </Shell>
   );
 }
 
-function Shell({ user, onLogout, children }) {
+function Shell({ user, onLogout, tab, onTab, children }) {
   const [showPw, setShowPw] = useState(false);
   return (
     <div className="app">
@@ -83,21 +86,34 @@ function Shell({ user, onLogout, children }) {
         <div className="brand">
           <span className="dot" /> Mikrotik Backup
         </div>
+        {tab !== null && (
+          <nav className="tabs">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                className={`tab ${tab === t.key ? "active" : ""}`}
+                onClick={() => onTab(t.key)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
+        )}
         <div className="topbar-right">
           <span className="muted">{user.username}</span>
           {!user.must_change_password && (
             <button className="link" onClick={() => setShowPw(true)}>
-              Change password
+              Сменить пароль
             </button>
           )}
           <button className="btn secondary" onClick={onLogout}>
-            Sign out
+            Выйти
           </button>
         </div>
       </header>
       <main className="container">{children}</main>
       {showPw && (
-        <Modal title="Change password" onClose={() => setShowPw(false)}>
+        <Modal title="Смена пароля" onClose={() => setShowPw(false)}>
           <ChangePassword onDone={() => setShowPw(false)} />
         </Modal>
       )}
@@ -123,15 +139,15 @@ function Login({ onLogin, error }) {
         <h1>
           <span className="dot" /> Mikrotik Backup
         </h1>
-        <p className="muted">Sign in to manage device backups.</p>
-        <label>Username</label>
+        <p className="muted">Войдите, чтобы управлять бэкапами устройств.</p>
+        <label>Имя пользователя</label>
         <input
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           autoFocus
           autoComplete="username"
         />
-        <label>Password</label>
+        <label>Пароль</label>
         <input
           type="password"
           value={password}
@@ -140,7 +156,7 @@ function Login({ onLogin, error }) {
         />
         {error && <div className="error">{error}</div>}
         <button className="btn" disabled={busy || !username || !password}>
-          {busy ? "Signing in…" : "Sign in"}
+          {busy ? "Вход…" : "Войти"}
         </button>
       </form>
     </div>
@@ -157,14 +173,14 @@ function ChangePassword({ onDone, forced = false }) {
   async function submit(e) {
     e.preventDefault();
     setError("");
-    if (next.length < 8) return setError("New password must be at least 8 characters.");
-    if (next !== confirm) return setError("Passwords do not match.");
+    if (next.length < 8) return setError("Новый пароль должен быть не короче 8 символов.");
+    if (next !== confirm) return setError("Пароли не совпадают.");
     setBusy(true);
     try {
       await api.changePassword(current, next);
       onDone();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to change password");
+      setError(err instanceof ApiError ? err.message : "Не удалось сменить пароль");
     } finally {
       setBusy(false);
     }
@@ -174,310 +190,22 @@ function ChangePassword({ onDone, forced = false }) {
     <form className={forced ? "card login" : ""} onSubmit={submit}>
       {forced && (
         <>
-          <h2>Set a new password</h2>
+          <h2>Задайте новый пароль</h2>
           <p className="muted">
-            You are using the initial admin password. Please choose a new one.
+            Вы используете начальный пароль администратора. Пожалуйста, смените его.
           </p>
         </>
       )}
-      <label>Current password</label>
+      <label>Текущий пароль</label>
       <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} />
-      <label>New password</label>
+      <label>Новый пароль</label>
       <input type="password" value={next} onChange={(e) => setNext(e.target.value)} />
-      <label>Confirm new password</label>
+      <label>Повторите новый пароль</label>
       <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
       {error && <div className="error">{error}</div>}
       <button className="btn" disabled={busy || !current || !next || !confirm}>
-        {busy ? "Saving…" : "Update password"}
+        {busy ? "Сохранение…" : "Обновить пароль"}
       </button>
     </form>
-  );
-}
-
-function Dashboard() {
-  const [devices, setDevices] = useState([]);
-  const [backups, setBackups] = useState([]);
-  const [selected, setSelected] = useState(null);
-  const [error, setError] = useState("");
-  const [showAdd, setShowAdd] = useState(false);
-  const [busyId, setBusyId] = useState(null);
-
-  const refreshDevices = useCallback(async () => {
-    try {
-      setDevices(await api.listDevices());
-    } catch (err) {
-      setError(err.message);
-    }
-  }, []);
-
-  const refreshBackups = useCallback(async (deviceId) => {
-    try {
-      setBackups(await api.listBackups(deviceId));
-    } catch (err) {
-      setError(err.message);
-    }
-  }, []);
-
-  useEffect(() => {
-    refreshDevices();
-    refreshBackups(null);
-  }, [refreshDevices, refreshBackups]);
-
-  async function runBackup(device) {
-    setError("");
-    setBusyId(device.id);
-    try {
-      await api.backupDevice(device.id);
-      await refreshDevices();
-      await refreshBackups(selected ? selected.id : null);
-    } catch (err) {
-      setError(`Backup of ${device.name} failed: ${err.message}`);
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function removeDevice(device) {
-    if (!window.confirm(`Delete "${device.name}" and all its backups?`)) return;
-    setError("");
-    try {
-      await api.deleteDevice(device.id);
-      if (selected && selected.id === device.id) setSelected(null);
-      await refreshDevices();
-      await refreshBackups(selected && selected.id === device.id ? null : selected?.id);
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  function selectDevice(device) {
-    const next = selected && selected.id === device.id ? null : device;
-    setSelected(next);
-    refreshBackups(next ? next.id : null);
-  }
-
-  return (
-    <>
-      {error && <div className="error banner">{error}</div>}
-
-      <section className="card">
-        <div className="card-head">
-          <h2>Devices</h2>
-          <button className="btn" onClick={() => setShowAdd(true)}>
-            + Add device
-          </button>
-        </div>
-        {devices.length === 0 ? (
-          <p className="muted">No devices yet. Add a Mikrotik router to start backing it up.</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Host</th>
-                <th>User</th>
-                <th>Enabled</th>
-                <th>Last backup</th>
-                <th>Backups</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {devices.map((d) => (
-                <tr
-                  key={d.id}
-                  className={selected && selected.id === d.id ? "selected" : ""}
-                >
-                  <td>
-                    <button className="link" onClick={() => selectDevice(d)}>
-                      {d.name}
-                    </button>
-                  </td>
-                  <td>
-                    {d.host}:{d.port}
-                  </td>
-                  <td>{d.username}</td>
-                  <td>{d.enabled ? "yes" : "no"}</td>
-                  <td>
-                    {fmtDate(d.last_backup_at)}{" "}
-                    {d.last_backup_status && (
-                      <span className={`tag ${d.last_backup_status}`}>
-                        {d.last_backup_status}
-                      </span>
-                    )}
-                  </td>
-                  <td>{d.backup_count}</td>
-                  <td className="actions">
-                    <button
-                      className="btn small"
-                      disabled={busyId === d.id}
-                      onClick={() => runBackup(d)}
-                    >
-                      {busyId === d.id ? "Backing up…" : "Back up now"}
-                    </button>
-                    <button className="btn small danger" onClick={() => removeDevice(d)}>
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-
-      <section className="card">
-        <div className="card-head">
-          <h2>
-            Backups{" "}
-            {selected && <span className="muted">— {selected.name}</span>}
-          </h2>
-          {selected && (
-            <button className="link" onClick={() => selectDevice(selected)}>
-              Show all
-            </button>
-          )}
-        </div>
-        {backups.length === 0 ? (
-          <p className="muted">No backups recorded yet.</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>When</th>
-                <th>File</th>
-                <th>Size</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {backups.map((b) => (
-                <tr key={b.id}>
-                  <td>{fmtDate(b.created_at)}</td>
-                  <td className="mono">{b.filename}</td>
-                  <td>{fmtSize(b.size_bytes)}</td>
-                  <td>
-                    <span className={`tag ${b.status}`}>{b.status}</span>
-                    {b.status === "error" && b.message && (
-                      <div className="muted small">{b.message}</div>
-                    )}
-                  </td>
-                  <td>
-                    {b.status === "ok" && (
-                      <button className="btn small" onClick={() => downloadBackup(b)}>
-                        Download
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-
-      {showAdd && (
-        <Modal title="Add device" onClose={() => setShowAdd(false)}>
-          <AddDevice
-            onCreated={async () => {
-              setShowAdd(false);
-              await refreshDevices();
-            }}
-          />
-        </Modal>
-      )}
-    </>
-  );
-}
-
-function AddDevice({ onCreated }) {
-  const [form, setForm] = useState({
-    name: "",
-    host: "",
-    port: 22,
-    username: "",
-    password: "",
-    enabled: true,
-  });
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  function set(field, value) {
-    setForm((f) => ({ ...f, [field]: value }));
-  }
-
-  async function submit(e) {
-    e.preventDefault();
-    setError("");
-    setBusy(true);
-    try {
-      await api.createDevice({ ...form, port: Number(form.port) });
-      onCreated();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to create device");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form onSubmit={submit}>
-      <label>Name</label>
-      <input value={form.name} onChange={(e) => set("name", e.target.value)} autoFocus />
-      <div className="row">
-        <div className="grow">
-          <label>Host / IP</label>
-          <input value={form.host} onChange={(e) => set("host", e.target.value)} />
-        </div>
-        <div className="port">
-          <label>SSH port</label>
-          <input
-            type="number"
-            value={form.port}
-            onChange={(e) => set("port", e.target.value)}
-          />
-        </div>
-      </div>
-      <label>SSH username</label>
-      <input value={form.username} onChange={(e) => set("username", e.target.value)} />
-      <label>SSH password</label>
-      <input
-        type="password"
-        value={form.password}
-        onChange={(e) => set("password", e.target.value)}
-      />
-      <label className="checkbox">
-        <input
-          type="checkbox"
-          checked={form.enabled}
-          onChange={(e) => set("enabled", e.target.checked)}
-        />
-        Include in scheduled backups
-      </label>
-      {error && <div className="error">{error}</div>}
-      <button
-        className="btn"
-        disabled={busy || !form.name || !form.host || !form.username || !form.password}
-      >
-        {busy ? "Saving…" : "Add device"}
-      </button>
-    </form>
-  );
-}
-
-function Modal({ title, onClose, children }) {
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <h2>{title}</h2>
-          <button className="link" onClick={onClose}>
-            ✕
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
   );
 }

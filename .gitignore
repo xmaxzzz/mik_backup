@@ -10,6 +10,9 @@ backend/app/data/
 *.sqlite
 *.sqlite3
 
+# --- built SPA copied in by the Docker build (never commit) ---
+backend/app/static/
+
 # --- python ---
 __pycache__/
 *.py[cod]

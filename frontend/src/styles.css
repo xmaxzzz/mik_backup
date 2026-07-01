@@ -279,3 +279,239 @@ td.actions {
   justify-content: space-between;
   margin-bottom: 8px;
 }
+.modal.wide {
+  width: 720px;
+}
+
+/* --- select / textarea share input styling --- */
+select,
+textarea {
+  width: 100%;
+  padding: 9px 11px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+}
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+.sep {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 18px 0;
+}
+.notice {
+  color: #bbf7d0;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 7px;
+  padding: 9px 12px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+.btn-group {
+  display: flex;
+  gap: 10px;
+}
+
+/* --- tabs --- */
+.tabs {
+  display: flex;
+  gap: 4px;
+}
+.tab {
+  background: none;
+  border: none;
+  color: var(--muted);
+  padding: 8px 14px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.tab:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
+.tab.active {
+  color: #fff;
+  background: var(--accent);
+}
+
+/* --- availability status dot --- */
+.status-dot {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--muted);
+  box-shadow: 0 0 0 0 transparent;
+}
+.status-dot.online {
+  background: var(--ok);
+  animation: pulse 2s infinite;
+}
+.status-dot.offline {
+  background: var(--danger);
+}
+.status-dot.unknown {
+  background: #6b7280;
+}
+.dot-cell {
+  text-align: center;
+  width: 28px;
+}
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(34, 197, 94, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .status-dot.online {
+    animation: none;
+  }
+}
+
+/* --- switch label --- */
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text);
+}
+.switch input {
+  width: auto;
+}
+
+/* --- segmented radio (auth type) --- */
+.seg {
+  display: flex;
+  gap: 8px;
+}
+.seg label {
+  flex: 1;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  cursor: pointer;
+  color: var(--text);
+}
+.seg label.active {
+  border-color: var(--accent);
+  background: rgba(59, 130, 246, 0.1);
+}
+.seg input {
+  width: auto;
+}
+
+/* --- cron presets --- */
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.chip {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 20px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.chip:hover {
+  border-color: var(--accent);
+}
+
+/* --- folder navigator --- */
+.folder-nav {
+  margin-bottom: 16px;
+}
+.folder-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  flex-wrap: wrap;
+}
+.folder-bar .path {
+  flex: 1;
+  min-width: 120px;
+  padding: 5px 8px;
+  background: var(--panel-2);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.folder-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.folder-list li {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.folder-list li:last-child {
+  border-bottom: none;
+}
+
+/* --- code blocks --- */
+.code {
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+}
+.code.block,
+pre.code {
+  display: block;
+  white-space: pre;
+  overflow-x: auto;
+  background: #0b0f18;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 12px;
+  margin: 8px 0;
+  color: #c9d4ea;
+}
+textarea.code {
+  resize: vertical;
+}
+
+/* --- responsive tables --- */
+.table-scroll {
+  overflow-x: auto;
+}
+.row-bad {
+  opacity: 0.6;
+}
+.fallback {
+  margin-top: 12px;
+}
+.fallback summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 13px;
+}

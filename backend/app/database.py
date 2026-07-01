@@ -12,7 +12,9 @@ settings = get_settings()
 
 engine = create_engine(
     settings.database_url,
-    connect_args={"check_same_thread": False},
+    # timeout gives SQLite a busy-wait so concurrent scheduler jobs
+    # (backups + availability polling) don't hit "database is locked".
+    connect_args={"check_same_thread": False, "timeout": 15},
     pool_pre_ping=True,
 )
 

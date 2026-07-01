@@ -11,10 +11,20 @@ from fastapi.staticfiles import StaticFiles
 
 from . import models
 from .config import get_settings
-from .database import Base, SessionLocal, engine
-from .routers import auth, backups, devices, health
+from .database import SessionLocal, engine
+from .migrations import run_migrations
+from .routers import (
+    auth,
+    backups,
+    devices,
+    health,
+    schedules,
+    settings as settings_router,
+    ssh,
+    yandex,
+)
 from .security import hash_password
-from .services import scheduler
+from .services import scheduler, ssh_keys
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,8 +56,9 @@ def _bootstrap_admin() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    run_migrations(engine)
     _bootstrap_admin()
+    ssh_keys.ensure_keys()
     scheduler.start()
     logger.info("%s started", settings.app_name)
     try:
@@ -64,6 +75,10 @@ app.include_router(health.router, prefix=api_prefix)
 app.include_router(auth.router, prefix=api_prefix)
 app.include_router(devices.router, prefix=api_prefix)
 app.include_router(backups.router, prefix=api_prefix)
+app.include_router(schedules.router, prefix=api_prefix)
+app.include_router(settings_router.router, prefix=api_prefix)
+app.include_router(yandex.router, prefix=api_prefix)
+app.include_router(ssh.router, prefix=api_prefix)
 
 
 # --- Static SPA ---

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -24,6 +24,18 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
+class Schedule(Base):
+    __tablename__ = "schedules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    cron: Mapped[str] = mapped_column(String(128))  # 5-field crontab
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+    devices: Mapped[list["Device"]] = relationship(back_populates="schedule")
+
+
 class Device(Base):
     __tablename__ = "devices"
 
@@ -32,11 +44,21 @@ class Device(Base):
     host: Mapped[str] = mapped_column(String(255))
     port: Mapped[int] = mapped_column(Integer, default=22)
     username: Mapped[str] = mapped_column(String(128))
-    # password stored encrypted with Fernet (never in plaintext)
-    password_enc: Mapped[str] = mapped_column(Text)
-    enabled: Mapped[bool] = mapped_column(default=True)
+    # "key" (shared app SSH key) or "password"
+    auth_type: Mapped[str] = mapped_column(String(16), default="key")
+    # password stored encrypted with Fernet (never plaintext); "" when auth_type=key
+    password_enc: Mapped[str] = mapped_column(Text, default="")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # nullable schedule -> manual backups only
+    schedule_id: Mapped[int | None] = mapped_column(
+        ForeignKey("schedules.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # live reachability (TCP), independent of backup status
+    online: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    last_check_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
+    schedule: Mapped["Schedule | None"] = relationship(back_populates="devices")
     backups: Mapped[list["Backup"]] = relationship(
         back_populates="device",
         cascade="all, delete-orphan",
@@ -55,6 +77,16 @@ class Backup(Base):
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(16), default="ok")  # ok | error
     message: Mapped[str] = mapped_column(Text, default="")
+    yandex_uploaded: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
 
     device: Mapped["Device"] = relationship(back_populates="backups")
+
+
+class Setting(Base):
+    """Key/value store for mutable app settings (Yandex + Telegram config)."""
+
+    __tablename__ = "settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, default="")  # encrypted for secrets
