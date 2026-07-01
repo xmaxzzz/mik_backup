@@ -1,0 +1,19 @@
+# keep the build context small and free of secrets / build artifacts
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+data/
+backend/app/data/
+**/__pycache__/
+*.py[cod]
+.venv/
+venv/
+frontend/node_modules/
+frontend/dist/
+.vscode/
+.idea/
+.claude/
+*.log
+README.md

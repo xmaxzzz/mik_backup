@@ -1,0 +1,33 @@
+# --- secrets (NEVER commit) ---
+.env
+.env.*
+!.env.example
+
+# --- runtime data & backups ---
+data/
+backend/app/data/
+*.db
+*.sqlite
+*.sqlite3
+
+# --- python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+
+# --- node / frontend build ---
+node_modules/
+frontend/dist/
+frontend/node_modules/
+
+# --- editors / OS ---
+.vscode/
+.idea/
+.claude/
+.DS_Store
+Thumbs.db
+*.log

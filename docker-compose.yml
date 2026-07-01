@@ -1,0 +1,15 @@
+services:
+  app:
+    build: .
+    image: mik-backup:latest
+    container_name: mik-backup
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATA_DIR: /data
+    ports:
+      - "8000:8000"
+    volumes:
+      # persists SQLite DB and backup files across rebuilds
+      - ./data:/data
