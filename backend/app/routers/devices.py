@@ -155,7 +155,7 @@ def _parse_csv(text: str) -> list[schemas.ImportRow]:
     for raw in data_rows:
         host = cell(raw, "host")
         port_s = cell(raw, "port")
-        login = cell(raw, "login") or "backup"
+        login = cell(raw, "login") or "backuser"
         note = cell(raw, "note")
         error = None
         port = settings.default_ssh_port
@@ -215,7 +215,7 @@ def import_confirm(payload: schemas.ImportConfirmRequest, db: Session = Depends(
             name=name,
             host=row.host.strip(),
             port=row.port,
-            username=row.login.strip() or "backup",
+            username=row.login.strip() or "backuser",
             auth_type=payload.auth_type,
             password_enc=pwd_enc,
             enabled=True,

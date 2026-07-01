@@ -62,7 +62,7 @@ class DeviceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     host: str = Field(min_length=1, max_length=255)
     port: int = Field(default=10322, ge=1, le=65535)
-    username: str = Field(default="backup", min_length=1, max_length=128)
+    username: str = Field(default="backuser", min_length=1, max_length=128)
     auth_type: AuthType = "key"
     password: str | None = None
     enabled: bool = True
@@ -176,7 +176,7 @@ class SshKeyOut(BaseModel):
 class ImportRow(BaseModel):
     host: str
     port: int = 10322
-    login: str = "backup"
+    login: str = "backuser"
     note: str = ""
     valid: bool = True
     error: str | None = None
@@ -191,7 +191,7 @@ class ImportPreview(BaseModel):
 class ImportConfirmRow(BaseModel):
     host: str
     port: int = Field(default=10322, ge=1, le=65535)
-    login: str = "backup"
+    login: str = "backuser"
     note: str = ""
 
 

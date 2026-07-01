@@ -64,7 +64,7 @@ def load_private_key() -> paramiko.Ed25519Key:
     return paramiko.Ed25519Key.from_private_key_file(str(_priv_path()))
 
 
-def build_ready_rsc(port: int, user: str = "backup") -> str:
+def build_ready_rsc(port: int, user: str = "backuser") -> str:
     """RouterOS script the user pastes to enable key-based backup access."""
     server = settings.server_ip or "<SERVER_IP>"
     pub = get_public_key()
@@ -73,9 +73,10 @@ def build_ready_rsc(port: int, user: str = "backup") -> str:
 #    Public key:
 #    {pub}
 #
-# 2) Then run in the router terminal:
-/ip service set ssh port={port} address={server}/32
-/user add name={user} group=full
+# 2) Then run in the router terminal (set a random non-empty password for
+#    {user} too — RouterOS still requires one even though login uses the key):
+/ip service set ssh port={port} address=""
+/user add name={user} group=full password=<random-non-empty-password>
 /user/ssh-keys import public-key-file=backup_key.pub user={user}
 #
 # 3) If your firewall has an input drop rule, allow the backup port from the

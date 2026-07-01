@@ -297,7 +297,9 @@ function SshKeyPanel() {
       </div>
       <p className="muted small">
         Для устройств с аутентификацией «по ключу» установите этот публичный ключ на
-        роутер (пользователь <span className="mono">backup</span>).
+        роутер (пользователь <span className="mono">backuser</span>). Задайте
+        пользователю случайный непустой пароль — RouterOS требует его даже при
+        входе по ключу. При firewall с drop-правилом откройте порт SSH выше него.
       </p>
       {error && <div className="error">{error}</div>}
       {open && key && (
@@ -333,7 +335,7 @@ function AddDevice({ schedules, onClose, onCreated }) {
     name: "",
     host: "",
     port: 10322,
-    username: "backup",
+    username: "backuser",
     auth_type: "key",
     password: "",
     enabled: true,
@@ -454,7 +456,7 @@ function AddDevice({ schedules, onClose, onCreated }) {
 }
 
 /* ----------------------------- CSV import ----------------------------- */
-const CSV_TEMPLATE = "host,port,login,note\n10.0.0.1,10322,backup,Роутер офис\n10.0.0.2,,backup,Склад\n";
+const CSV_TEMPLATE = "host,port,login,note\n10.0.0.1,10322,backuser,Роутер офис\n10.0.0.2,,backuser,Склад\n";
 
 function ImportDevices({ schedules, onClose, onDone }) {
   const [preview, setPreview] = useState(null);
@@ -517,7 +519,7 @@ function ImportDevices({ schedules, onClose, onDone }) {
         <>
           <p className="muted small">
             Колонки: <span className="mono">host, port (деф. 10322), login (деф.
-            backup), note</span>. Первая строка-заголовок опциональна.
+            backuser), note</span>. Первая строка-заголовок опциональна.
           </p>
           <pre className="code block">{CSV_TEMPLATE}</pre>
           <label>Файл CSV (до 1 МБ)</label>
