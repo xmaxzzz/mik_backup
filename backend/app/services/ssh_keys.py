@@ -7,6 +7,8 @@ install on each RouterOS device.
 from __future__ import annotations
 
 import logging
+import secrets
+import string
 from functools import lru_cache
 
 import paramiko
@@ -64,19 +66,36 @@ def load_private_key() -> paramiko.Ed25519Key:
     return paramiko.Ed25519Key.from_private_key_file(str(_priv_path()))
 
 
+# alphanumeric only: safe to paste into a RouterOS terminal without escaping
+_PWD_ALPHABET = string.ascii_letters + string.digits
+
+
+def _random_password(length: int = 20) -> str:
+    return "".join(secrets.choice(_PWD_ALPHABET) for _ in range(length))
+
+
 def build_ready_rsc(port: int, user: str = "backuser") -> str:
-    """RouterOS script the user pastes to enable key-based backup access."""
+    """RouterOS script the user pastes to enable key-based backup access.
+
+    A fresh random password is embedded on every call. The app itself never
+    uses it (it logs in with the SSH key) — it only prevents the account from
+    being created with an empty password, which would allow password-less
+    logins via other services.
+    """
     server = settings.server_ip or "<SERVER_IP>"
     pub = get_public_key()
+    pwd = _random_password()
     return f"""# --- Mikrotik Backup: enable key-based access ---
 # 1) Upload the public key file (below) to the router's Files as "backup_key.pub".
 #    Public key:
 #    {pub}
 #
-# 2) Then run in the router terminal (set a random non-empty password for
-#    {user} too — RouterOS still requires one even though login uses the key):
+# 2) Then run in the router terminal. The password below is randomly
+#    generated for this script and is NOT used by the backup app (it logs
+#    in with the key) — it only keeps the account from having an empty
+#    password. No need to save it anywhere.
 /ip service set ssh port={port} address=""
-/user add name={user} group=full password=<random-non-empty-password>
+/user add name={user} group=full password="{pwd}"
 /user/ssh-keys import public-key-file=backup_key.pub user={user}
 #
 # 3) If your firewall has an input drop rule, allow the backup port from the

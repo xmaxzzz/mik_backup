@@ -137,17 +137,20 @@ On first start the app generates an **ED25519** keypair (private key in
 public key and a ready-to-paste RouterOS script. On each router:
 
 ```
-# upload the public key to Files as backup_key.pub, then (set a random
-# non-empty password for backuser too — RouterOS requires one even for key auth):
+# upload the public key to Files as backup_key.pub, then:
 /ip service set ssh port=10322 address=""
-/user add name=backuser group=full password=<random-non-empty-password>
+/user add name=backuser group=full password="<generated in the UI script>"
 /user/ssh-keys import public-key-file=backup_key.pub user=backuser
 # if a firewall drop rule exists, allow the port from the server above it:
 /ip firewall filter add chain=input protocol=tcp dst-port=10322 \
     src-address=<SERVER_IP> action=accept place-before=0
 ```
 
-Devices created with auth mode **“по ключу”** then need no stored password.
+The script shown in the UI embeds a **freshly generated random password** on
+every view — the app never uses it (it logs in with the key); it only keeps
+the `backuser` account from being created with an empty password. You don't
+need to save it. Devices created with auth mode **“по ключу”** need no stored
+password.
 
 ---
 
