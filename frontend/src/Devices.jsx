@@ -12,6 +12,7 @@ export default function Devices() {
   const [error, setError] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const selectedRef = useRef(null);
 
@@ -128,13 +129,23 @@ export default function Devices() {
                 {devices.map((d) => (
                   <tr
                     key={d.id}
-                    className={selected && selected.id === d.id ? "selected" : ""}
+                    className={`row-click${
+                      selected && selected.id === d.id ? " selected" : ""
+                    }`}
+                    onClick={() => selectDevice(d)}
+                    title="Клик по строке — фильтр бэкапов, по имени — редактирование"
                   >
                     <td className="dot-cell">
                       <StatusDot online={d.online} lastCheck={d.last_check_at} />
                     </td>
                     <td>
-                      <button className="link" onClick={() => selectDevice(d)}>
+                      <button
+                        className="link"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditing(d);
+                        }}
+                      >
                         {d.name}
                       </button>
                     </td>
@@ -167,13 +178,19 @@ export default function Devices() {
                       <button
                         className="btn small"
                         disabled={busyId === d.id}
-                        onClick={() => runBackup(d)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          runBackup(d);
+                        }}
                       >
                         {busyId === d.id ? "Бэкап…" : "Бэкап"}
                       </button>
                       <button
                         className="btn small danger"
-                        onClick={() => removeDevice(d)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeDevice(d);
+                        }}
                       >
                         Удалить
                       </button>
@@ -245,11 +262,22 @@ export default function Devices() {
       </section>
 
       {showAdd && (
-        <AddDevice
+        <DeviceForm
           schedules={schedules}
           onClose={() => setShowAdd(false)}
-          onCreated={async () => {
+          onSaved={async () => {
             setShowAdd(false);
+            await refreshDevices();
+          }}
+        />
+      )}
+      {editing && (
+        <DeviceForm
+          device={editing}
+          schedules={schedules}
+          onClose={() => setEditing(null)}
+          onSaved={async () => {
+            setEditing(null);
             await refreshDevices();
           }}
         />
@@ -330,16 +358,17 @@ function ScheduleSelect({ value, onChange, schedules }) {
   );
 }
 
-function AddDevice({ schedules, onClose, onCreated }) {
+function DeviceForm({ device = null, schedules, onClose, onSaved }) {
+  const isNew = !device;
   const [form, setForm] = useState({
-    name: "",
-    host: "",
-    port: 10322,
-    username: "backuser",
-    auth_type: "key",
+    name: device?.name || "",
+    host: device?.host || "",
+    port: device?.port ?? 10322,
+    username: device?.username || "backuser",
+    auth_type: device?.auth_type || "key",
     password: "",
-    enabled: true,
-    schedule_id: "",
+    enabled: device?.enabled ?? true,
+    schedule_id: device?.schedule_id ? String(device.schedule_id) : "",
   });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -353,32 +382,40 @@ function AddDevice({ schedules, onClose, onCreated }) {
     setError("");
     setBusy(true);
     try {
-      await api.createDevice({
+      const body = {
         name: form.name,
         host: form.host,
         port: Number(form.port),
         username: form.username,
         auth_type: form.auth_type,
-        password: form.auth_type === "password" ? form.password : undefined,
         enabled: form.enabled,
         schedule_id: form.schedule_id ? Number(form.schedule_id) : null,
-      });
-      onCreated();
+      };
+      if (form.auth_type === "password" && form.password) {
+        body.password = form.password;
+      }
+      if (isNew) await api.createDevice(body);
+      else await api.updateDevice(device.id, body);
+      onSaved();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Ошибка создания");
+      setError(err instanceof ApiError ? err.message : "Ошибка сохранения");
     } finally {
       setBusy(false);
     }
   }
 
+  // a password is required only when the device will use password auth
+  // and doesn't already have one stored (new device or switched from key)
+  const needPassword =
+    form.auth_type === "password" && (isNew || device.auth_type !== "password");
   const canSubmit =
-    form.name &&
-    form.host &&
-    form.username &&
-    (form.auth_type === "key" || form.password);
+    form.name && form.host && form.username && (!needPassword || form.password);
 
   return (
-    <Modal title="Добавить устройство" onClose={onClose}>
+    <Modal
+      title={isNew ? "Добавить устройство" : "Изменить устройство"}
+      onClose={onClose}
+    >
       <form onSubmit={submit}>
         <label>Имя</label>
         <input value={form.name} onChange={(e) => set("name", e.target.value)} autoFocus />
@@ -426,6 +463,7 @@ function AddDevice({ schedules, onClose, onCreated }) {
             <input
               type="password"
               value={form.password}
+              placeholder={needPassword ? "" : "•••••••• (пусто — не менять)"}
               onChange={(e) => set("password", e.target.value)}
             />
           </>
@@ -448,7 +486,7 @@ function AddDevice({ schedules, onClose, onCreated }) {
         </label>
         {error && <div className="error">{error}</div>}
         <button className="btn" disabled={busy || !canSubmit}>
-          {busy ? "Сохранение…" : "Добавить"}
+          {busy ? "Сохранение…" : isNew ? "Добавить" : "Сохранить"}
         </button>
       </form>
     </Modal>

@@ -507,6 +507,12 @@ textarea.code {
 .row-bad {
   opacity: 0.6;
 }
+tr.row-click {
+  cursor: pointer;
+}
+tr.row-click:hover {
+  background: rgba(59, 130, 246, 0.05);
+}
 .fallback {
   margin-top: 12px;
 }

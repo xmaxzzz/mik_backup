@@ -136,6 +136,17 @@ def _parse_csv(text: str) -> list[schemas.ImportRow]:
     if not records:
         return rows
 
+    # Excel/Winbox exports sometimes quote the WHOLE line as one cell
+    # ("10.0.0.1,10322,user,""Note"""): such rows parse as a single field
+    # containing commas. If that's the dominant shape, unwrap those cells
+    # by re-parsing each of them as its own CSV line.
+    single = sum(1 for r in records if len(r) == 1 and "," in r[0])
+    if single > len(records) / 2:
+        records = [
+            next(csv.reader([r[0]])) if len(r) == 1 and "," in r[0] else r
+            for r in records
+        ]
+
     # detect an optional header row
     header = [c.strip().lower() for c in records[0]]
     has_header = "host" in header
