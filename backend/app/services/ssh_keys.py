@@ -70,36 +70,25 @@ def load_private_key() -> paramiko.Ed25519Key:
 _PWD_ALPHABET = string.ascii_letters + string.digits
 
 
-def _random_password(length: int = 20) -> str:
+def random_password(length: int = 20) -> str:
     return "".join(secrets.choice(_PWD_ALPHABET) for _ in range(length))
 
 
-def build_ready_rsc(port: int, user: str = "backuser") -> str:
-    """RouterOS script the user pastes to enable key-based backup access.
+def build_ready_rsc(port: int, password: str, user: str = "backuser") -> str:
+    """Per-device RouterOS script: create the backup account + import the key.
 
-    A fresh random password is embedded on every call. The app itself never
-    uses it (it logs in with the SSH key) — it only prevents the account from
-    being created with an empty password, which would allow password-less
-    logins via other services.
+    The password is the device's stored account password (generated from the
+    device card). The app itself logs in with the SSH key for key-auth devices.
     """
-    server = settings.server_ip or "<SERVER_IP>"
     pub = get_public_key()
-    pwd = _random_password()
     return f"""# --- Mikrotik Backup: enable key-based access ---
 # 1) Upload the public key file (below) to the router's Files as "backup_key.pub".
 #    Public key:
 #    {pub}
 #
-# 2) Then run in the router terminal. The password below is randomly
-#    generated for this script and is NOT used by the backup app (it logs
-#    in with the key) — it only keeps the account from having an empty
-#    password. No need to save it anywhere.
+# 2) Then run in the router terminal. The {user} password below is stored
+#    (encrypted) in the backup system — view it any time in the device card.
 /ip service set ssh port={port} address=""
-/user add name={user} group=full password="{pwd}"
+/user add name={user} group=full password="{password}"
 /user/ssh-keys import public-key-file=backup_key.pub user={user}
-#
-# 3) If your firewall has an input drop rule, allow the backup port from the
-#    server ABOVE that drop rule:
-/ip firewall filter add chain=input protocol=tcp dst-port={port} \\
-    src-address={server} action=accept comment="mik-backup" place-before=0
 """

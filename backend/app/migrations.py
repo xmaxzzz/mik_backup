@@ -20,6 +20,7 @@ _COLUMNS: dict[str, dict[str, str]] = {
     "devices": {
         "auth_type": "VARCHAR(16) DEFAULT 'key'",
         "password_enc": "TEXT DEFAULT ''",
+        "comment": "TEXT DEFAULT ''",
         "schedule_id": "INTEGER",
         "online": "BOOLEAN",
         "last_check_at": "DATETIME",

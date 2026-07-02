@@ -148,6 +148,9 @@ export default function Devices() {
                       >
                         {d.name}
                       </button>
+                      {d.comment && (
+                        <div className="muted small">{d.comment}</div>
+                      )}
                     </td>
                     <td className="mono">
                       {d.host}:{d.port}
@@ -324,11 +327,9 @@ function SshKeyPanel() {
         </button>
       </div>
       <p className="muted small">
-        Для устройств с аутентификацией «по ключу» установите этот публичный ключ на
-        роутер (пользователь <span className="mono">backuser</span>). Случайный пароль
-        уже сгенерирован внутри скрипта — приложение входит по ключу и пароль не
-        использует, он лишь защищает аккаунт от пустого пароля (сохранять его не
-        нужно). При firewall с drop-правилом откройте порт SSH выше него.
+        Приложение входит на роутеры по этому ключу. Готовый код для вставки в
+        роутер (с паролем) формируется в карточке устройства — кнопка
+        «Сгенерировать пароль».
       </p>
       {error && <div className="error">{error}</div>}
       {open && key && (
@@ -336,9 +337,6 @@ function SshKeyPanel() {
           <label>Публичный ключ</label>
           <textarea className="mono code" readOnly rows={2} value={key.public_key} />
           <CopyButton text={key.public_key} label="Скопировать публичный ключ" />
-          <label style={{ marginTop: 14 }}>Готовый скрипт для роутера</label>
-          <pre className="code block">{key.ready_rsc}</pre>
-          <CopyButton text={key.ready_rsc} label="Скопировать скрипт" />
         </>
       )}
     </section>
@@ -368,11 +366,15 @@ function DeviceForm({ device = null, schedules, onClose, onSaved }) {
     username: device?.username || "backuser",
     auth_type: device?.auth_type || "key",
     password: "",
+    comment: device?.comment || "",
     enabled: device?.enabled ?? true,
     schedule_id: device?.schedule_id ? String(device.schedule_id) : "",
   });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [generated, setGenerated] = useState(null); // {password, ready_rsc}
+  const [revealed, setRevealed] = useState(null); // stored password shown
+  const [hasPassword, setHasPassword] = useState(device?.has_password || false);
 
   function set(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -389,6 +391,7 @@ function DeviceForm({ device = null, schedules, onClose, onSaved }) {
         port: Number(form.port),
         username: form.username,
         auth_type: form.auth_type,
+        comment: form.comment,
         enabled: form.enabled,
         schedule_id: form.schedule_id ? Number(form.schedule_id) : null,
       };
@@ -405,10 +408,42 @@ function DeviceForm({ device = null, schedules, onClose, onSaved }) {
     }
   }
 
+  async function generatePassword() {
+    if (
+      hasPassword &&
+      !window.confirm(
+        "У устройства уже есть сохранённый пароль. Сгенерировать новый вместо него?"
+      )
+    )
+      return;
+    setError("");
+    setBusy(true);
+    try {
+      const res = await api.generateDevicePassword(device.id);
+      setGenerated(res);
+      setRevealed(null);
+      setHasPassword(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Ошибка генерации");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revealPassword() {
+    setError("");
+    try {
+      const res = await api.getDevicePassword(device.id);
+      setRevealed(res.password);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не удалось получить пароль");
+    }
+  }
+
   // a password is required only when the device will use password auth
-  // and doesn't already have one stored (new device or switched from key)
+  // and doesn't already have one stored
   const needPassword =
-    form.auth_type === "password" && (isNew || device.auth_type !== "password");
+    form.auth_type === "password" && (isNew || !hasPassword);
   const canSubmit =
     form.name && form.host && form.username && (!needPassword || form.password);
 
@@ -477,6 +512,13 @@ function DeviceForm({ device = null, schedules, onClose, onSaved }) {
           onChange={(v) => set("schedule_id", v || "")}
         />
 
+        <label>Комментарий</label>
+        <input
+          value={form.comment}
+          placeholder="например: объект, за NAT, особенности доступа…"
+          onChange={(e) => set("comment", e.target.value)}
+        />
+
         <label className="checkbox">
           <input
             type="checkbox"
@@ -485,6 +527,51 @@ function DeviceForm({ device = null, schedules, onClose, onSaved }) {
           />
           Включено (участвует в расписании)
         </label>
+
+        {!isNew && (
+          <>
+            <hr className="sep" />
+            <label>Пароль устройства и код для роутера</label>
+            <div className="btn-group">
+              <button
+                type="button"
+                className="btn small"
+                disabled={busy}
+                onClick={generatePassword}
+              >
+                Сгенерировать пароль
+              </button>
+              {hasPassword && (
+                <button
+                  type="button"
+                  className="btn small secondary"
+                  onClick={() =>
+                    revealed ? setRevealed(null) : revealPassword()
+                  }
+                >
+                  {revealed ? "Скрыть пароль" : "Показать пароль"}
+                </button>
+              )}
+            </div>
+            {revealed && !generated && (
+              <div className="notice">
+                Пароль: <span className="mono">{revealed}</span>{" "}
+                <CopyButton text={revealed} label="Скопировать" className="btn small secondary" />
+              </div>
+            )}
+            {generated && (
+              <>
+                <div className="notice">
+                  Пароль сохранён: <span className="mono">{generated.password}</span>
+                </div>
+                <label>Код для вставки в роутер</label>
+                <pre className="code block">{generated.ready_rsc}</pre>
+                <CopyButton text={generated.ready_rsc} label="Скопировать код" />
+              </>
+            )}
+          </>
+        )}
+
         {error && <div className="error">{error}</div>}
         <button className="btn" disabled={busy || !canSubmit}>
           {busy ? "Сохранение…" : isNew ? "Добавить" : "Сохранить"}

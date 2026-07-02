@@ -65,6 +65,7 @@ class DeviceCreate(BaseModel):
     username: str = Field(default="backuser", min_length=1, max_length=128)
     auth_type: AuthType = "key"
     password: str | None = None
+    comment: str = ""
     enabled: bool = True
     schedule_id: int | None = None
 
@@ -82,6 +83,7 @@ class DeviceUpdate(BaseModel):
     username: str | None = Field(default=None, max_length=128)
     auth_type: AuthType | None = None
     password: str | None = None
+    comment: str | None = None
     enabled: bool | None = None
     schedule_id: int | None = None
 
@@ -95,6 +97,8 @@ class DeviceOut(BaseModel):
     port: int
     username: str
     auth_type: str
+    comment: str = ""
+    has_password: bool = False
     enabled: bool
     schedule_id: int | None = None
     schedule_name: str | None = None
@@ -169,6 +173,14 @@ class YandexFolderItem(BaseModel):
 # --- ssh key ---
 class SshKeyOut(BaseModel):
     public_key: str
+
+
+class DevicePasswordOut(BaseModel):
+    password: str
+
+
+class GeneratedPasswordOut(BaseModel):
+    password: str
     ready_rsc: str
 
 

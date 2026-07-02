@@ -46,8 +46,10 @@ class Device(Base):
     username: Mapped[str] = mapped_column(String(128))
     # "key" (shared app SSH key) or "password"
     auth_type: Mapped[str] = mapped_column(String(16), default="key")
-    # password stored encrypted with Fernet (never plaintext); "" when auth_type=key
+    # the device account's password, Fernet-encrypted (never plaintext);
+    # kept for key-auth devices too — it's the router account's password
     password_enc: Mapped[str] = mapped_column(Text, default="")
+    comment: Mapped[str] = mapped_column(Text, default="")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     # nullable schedule -> manual backups only
     schedule_id: Mapped[int | None] = mapped_column(

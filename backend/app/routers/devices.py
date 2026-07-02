@@ -11,8 +11,8 @@ from .. import models, schemas
 from ..config import get_settings
 from ..database import get_db
 from ..deps import get_current_user
-from ..security import encrypt_secret
-from ..services import backup_service
+from ..security import decrypt_secret, encrypt_secret
+from ..services import backup_service, ssh_keys
 
 settings = get_settings()
 
@@ -34,6 +34,8 @@ def _to_out(device: models.Device) -> schemas.DeviceOut:
         port=device.port,
         username=device.username,
         auth_type=device.auth_type,
+        comment=device.comment or "",
+        has_password=bool(device.password_enc),
         enabled=device.enabled,
         schedule_id=device.schedule_id,
         schedule_name=device.schedule.name if device.schedule else None,
@@ -75,10 +77,9 @@ def create_device(payload: schemas.DeviceCreate, db: Session = Depends(get_db)):
         username=payload.username,
         auth_type=payload.auth_type,
         password_enc=(
-            encrypt_secret(payload.password)
-            if payload.auth_type == "password" and payload.password
-            else ""
+            encrypt_secret(payload.password) if payload.password else ""
         ),
+        comment=payload.comment,
         enabled=payload.enabled,
         schedule_id=payload.schedule_id,
     )
@@ -101,8 +102,6 @@ def update_device(
         setattr(device, field, value)
     if pwd:
         device.password_enc = encrypt_secret(pwd)
-    if device.auth_type == "key":
-        device.password_enc = ""
     db.commit()
     db.refresh(device)
     return _to_out(device)
@@ -113,6 +112,34 @@ def delete_device(device_id: int, db: Session = Depends(get_db)):
     device = _get_or_404(db, device_id)
     db.delete(device)
     db.commit()
+
+
+@router.get("/{device_id}/password", response_model=schemas.DevicePasswordOut)
+def reveal_device_password(device_id: int, db: Session = Depends(get_db)):
+    device = _get_or_404(db, device_id)
+    if not device.password_enc:
+        raise HTTPException(
+            status_code=404, detail="У устройства нет сохранённого пароля"
+        )
+    return schemas.DevicePasswordOut(password=decrypt_secret(device.password_enc))
+
+
+@router.post(
+    "/{device_id}/generate-password", response_model=schemas.GeneratedPasswordOut
+)
+def generate_device_password(device_id: int, db: Session = Depends(get_db)):
+    """Generate and store a random account password for this device and
+    return it together with a ready-to-paste RouterOS provisioning script."""
+    device = _get_or_404(db, device_id)
+    password = ssh_keys.random_password()
+    device.password_enc = encrypt_secret(password)
+    db.commit()
+    return schemas.GeneratedPasswordOut(
+        password=password,
+        ready_rsc=ssh_keys.build_ready_rsc(
+            port=device.port, password=password, user=device.username
+        ),
+    )
 
 
 @router.post("/{device_id}/backup", response_model=schemas.BackupOut)

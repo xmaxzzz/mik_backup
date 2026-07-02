@@ -85,6 +85,9 @@ export const api = {
     request(`/devices/${id}`, { method: "PATCH", body: patch }),
   deleteDevice: (id) => request(`/devices/${id}`, { method: "DELETE" }),
   backupDevice: (id) => request(`/devices/${id}/backup`, { method: "POST" }),
+  getDevicePassword: (id) => request(`/devices/${id}/password`),
+  generateDevicePassword: (id) =>
+    request(`/devices/${id}/generate-password`, { method: "POST" }),
   importPreview: (file) => upload("/devices/import", file),
   importConfirm: (payload) =>
     request("/devices/import/confirm", { method: "POST", body: payload }),

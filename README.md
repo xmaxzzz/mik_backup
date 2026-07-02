@@ -133,24 +133,21 @@ is created and all existing devices are attached to it.
 ## SSH-key auth (recommended)
 
 On first start the app generates an **ED25519** keypair (private key in
-`data/ssh/`, chmod 600). Open **Устройства → SSH-ключ приложения** to copy the
-public key and a ready-to-paste RouterOS script. On each router:
+`data/ssh/`, chmod 600). Provisioning is per device: open the device card and
+click **«Сгенерировать пароль»** — the app stores a random account password for
+that device (Fernet-encrypted, viewable any time via «Показать пароль») and
+produces a ready-to-paste RouterOS script:
 
 ```
-# upload the public key to Files as backup_key.pub, then:
-/ip service set ssh port=10322 address=""
-/user add name=backuser group=full password="<generated in the UI script>"
+# upload the public key (from the SSH-key panel) to Files as backup_key.pub, then:
+/ip service set ssh port=<device port> address=""
+/user add name=backuser group=full password="<generated & stored>"
 /user/ssh-keys import public-key-file=backup_key.pub user=backuser
-# if a firewall drop rule exists, allow the port from the server above it:
-/ip firewall filter add chain=input protocol=tcp dst-port=10322 \
-    src-address=<SERVER_IP> action=accept place-before=0
 ```
 
-The script shown in the UI embeds a **freshly generated random password** on
-every view — the app never uses it (it logs in with the key); it only keeps
-the `backuser` account from being created with an empty password. You don't
-need to save it. Devices created with auth mode **“по ключу”** need no stored
-password.
+The app logs into key-auth devices with the SSH key — the stored password is
+for your own admin access to the router account. The public key itself is
+available under **Устройства → SSH-ключ приложения**.
 
 ---
 
