@@ -53,6 +53,7 @@ export function TerminalView({ device, credentials = null, generation = 0, onCon
             type: "credentials",
             username: credentials.username,
             password: credentials.password,
+            port: credentials.port,
           })
         );
       }
@@ -123,6 +124,7 @@ export default function TerminalPage({ deviceId }) {
   const [hint, setHint] = useState("");
   const [formUser, setFormUser] = useState("");
   const [formPass, setFormPass] = useState("");
+  const [formPort, setFormPort] = useState("");
 
   useEffect(() => {
     if (!getToken()) {
@@ -139,6 +141,7 @@ export default function TerminalPage({ deviceId }) {
         }
         setDevice(d);
         setFormUser(d.username);
+        setFormPort(String(d.port));
         document.title = `SSH — ${d.name}`;
       })
       .catch((e) => setError(e.message));
@@ -158,7 +161,11 @@ export default function TerminalPage({ deviceId }) {
 
   function connectWithPassword(e) {
     e.preventDefault();
-    setCredentials({ username: formUser, password: formPass });
+    setCredentials({
+      username: formUser,
+      password: formPass,
+      port: Number(formPort) || device.port,
+    });
     setShowLogin(false);
     setHint("");
     setGeneration((g) => g + 1);
@@ -182,7 +189,7 @@ export default function TerminalPage({ deviceId }) {
               SSH — {device.name}{" "}
               <span className="mono muted">
                 {(credentials ? credentials.username : device.username)}@{device.host}:
-                {device.port}
+                {credentials ? credentials.port || device.port : device.port}
               </span>
               {credentials && <span className="tag ok">по паролю</span>}
             </>
@@ -233,6 +240,14 @@ export default function TerminalPage({ deviceId }) {
             value={formPass}
             autoFocus
             onChange={(e) => setFormPass(e.target.value)}
+          />
+          <input
+            className="term-port"
+            type="number"
+            placeholder="порт"
+            title="SSH-порт"
+            value={formPort}
+            onChange={(e) => setFormPort(e.target.value)}
           />
           <button className="btn small" disabled={!formUser || !formPass}>
             Подключиться

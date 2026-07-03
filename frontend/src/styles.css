@@ -338,6 +338,9 @@ td.actions {
   width: auto;
   flex: 0 1 220px;
 }
+.term-login-bar input.term-port {
+  flex: 0 0 90px;
+}
 .term-login-bar .btn {
   margin-top: 0;
 }

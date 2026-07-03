@@ -57,8 +57,10 @@ async def device_terminal(
     await websocket.accept()
 
     # One-off login/password mode: the client sends a credentials frame first.
-    # Nothing is stored — used when the app key isn't installed on the router.
+    # Nothing is stored — used when the app key isn't installed on the router
+    # (which may still be on a different SSH port, e.g. the default 22).
     login_user = dev_username
+    use_port = port
     password_override = None
     if auth == "password":
         try:
@@ -68,6 +70,12 @@ async def device_terminal(
             return
         login_user = (creds.get("username") or dev_username).strip() or dev_username
         password_override = creds.get("password") or ""
+        try:
+            p = int(creds.get("port"))
+            if 1 <= p <= 65535:
+                use_port = p
+        except (TypeError, ValueError):
+            pass
 
     logger.info(
         "Terminal session opened for device %s by %s (%s)",
@@ -79,7 +87,7 @@ async def device_terminal(
         await ssh_terminal.bridge(
             websocket,
             host=host,
-            port=port,
+            port=use_port,
             username=login_user,
             auth_type=auth_type,
             password_enc=password_enc,
