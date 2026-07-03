@@ -59,6 +59,8 @@ class Device(Base):
     online: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     last_check_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # RouterOS version, parsed from the /export header on each successful backup
+    ros_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     schedule: Mapped["Schedule | None"] = relationship(back_populates="devices")

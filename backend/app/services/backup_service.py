@@ -18,10 +18,19 @@ logger = logging.getLogger("mikbackup.backup")
 settings = get_settings()
 
 _SAFE = re.compile(r"[^A-Za-z0-9._-]+")
+# /export header looks like: "# 2026-07-03 13:46:31 by RouterOS 7.23.1"
+_ROS_VER = re.compile(r"RouterOS\s+v?([0-9][\w.\-]*)", re.IGNORECASE)
 
 
 def _slug(value: str) -> str:
     return _SAFE.sub("_", value).strip("_") or "device"
+
+
+def _parse_ros_version(config: str) -> str | None:
+    """Extract the RouterOS version from the /export header (first lines)."""
+    head = "\n".join(config.splitlines()[:5])
+    m = _ROS_VER.search(head)
+    return m.group(1) if m else None
 
 
 def _device_dir(device: models.Device) -> Path:
@@ -73,6 +82,10 @@ def run_backup(db: Session, device: models.Device) -> models.Backup:
 
     path = _device_dir(device) / filename
     path.write_text(config, encoding="utf-8")
+
+    version = _parse_ros_version(config)
+    if version:
+        device.ros_version = version
 
     backup = models.Backup(
         device_id=device.id,

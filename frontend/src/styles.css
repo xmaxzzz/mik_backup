@@ -440,6 +440,14 @@ h3 {
   text-align: center;
   width: 28px;
 }
+.ping-cell {
+  white-space: nowrap;
+}
+.ping {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
 @keyframes pulse {
   0% {
     box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5);

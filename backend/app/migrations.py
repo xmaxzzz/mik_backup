@@ -25,6 +25,7 @@ _COLUMNS: dict[str, dict[str, str]] = {
         "online": "BOOLEAN",
         "latency_ms": "INTEGER",
         "last_check_at": "DATETIME",
+        "ros_version": "VARCHAR(32)",
     },
     "backups": {
         "yandex_uploaded": "BOOLEAN DEFAULT 0",

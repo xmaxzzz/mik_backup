@@ -42,6 +42,7 @@ def _to_out(device: models.Device) -> schemas.DeviceOut:
         online=device.online,
         latency_ms=device.latency_ms,
         last_check_at=device.last_check_at,
+        ros_version=device.ros_version,
         created_at=device.created_at,
         last_backup_at=latest.created_at if latest else None,
         last_backup_status=latest.status if latest else None,

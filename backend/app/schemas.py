@@ -105,6 +105,7 @@ class DeviceOut(BaseModel):
     online: bool | None = None
     latency_ms: int | None = None
     last_check_at: datetime | None = None
+    ros_version: str | None = None
     created_at: datetime
     last_backup_at: datetime | None = None
     last_backup_status: str | None = None

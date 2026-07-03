@@ -157,7 +157,8 @@ export default function Devices() {
                   <th></th>
                   <th>Имя</th>
                   <th>Адрес</th>
-                  <th>Аутентификация</th>
+                  <th>Пинг</th>
+                  <th>Версия ROS</th>
                   <th>Расписание</th>
                   <th>Посл. бэкап</th>
                   <th></th>
@@ -186,13 +187,16 @@ export default function Devices() {
                     </td>
                     <td className="mono">
                       {d.host}:{d.port}
-                      {d.online && d.latency_ms != null && (
-                        <span className="muted small"> · {d.latency_ms} мс</span>
+                    </td>
+                    <td className="ping-cell">
+                      {d.online && d.latency_ms != null ? (
+                        <span className="ping">{d.latency_ms} мс</span>
+                      ) : (
+                        <span className="muted">—</span>
                       )}
                     </td>
-                    <td>
-                      {d.auth_type === "key" ? "🔑 ключ" : "🔒 пароль"}{" "}
-                      <span className="muted small">{d.username}</span>
+                    <td className="mono">
+                      {d.ros_version || <span className="muted">—</span>}
                     </td>
                     <td>{d.schedule_name || <span className="muted">— ручной</span>}</td>
                     <td>
