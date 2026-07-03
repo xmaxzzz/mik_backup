@@ -214,8 +214,6 @@ export default function Devices() {
         )}
       </section>
 
-      <SshKeyPanel />
-
       {showAdd && (
         <DeviceForm
           schedules={schedules}
@@ -248,51 +246,6 @@ export default function Devices() {
         />
       )}
     </>
-  );
-}
-
-/* ----------------------------- SSH key panel ----------------------------- */
-function SshKeyPanel() {
-  const [key, setKey] = useState(null);
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState("");
-
-  async function load() {
-    if (key) {
-      setOpen((o) => !o);
-      return;
-    }
-    try {
-      setKey(await api.getSshKey());
-      setOpen(true);
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  return (
-    <section className="card">
-      <div className="card-head">
-        <h2>SSH-ключ приложения</h2>
-        <button className="btn secondary" onClick={load}>
-          {open ? "Скрыть" : "Показать ключ и инструкцию"}
-        </button>
-      </div>
-      <p className="muted small">
-        Приложение входит на роутеры по этому ключу. Готовый код для вставки в
-        роутер (с паролем) формируется в карточке устройства — кнопка
-        «Сгенерировать пароль». Файл ключа создаётся кодом прямо на роутере —
-        вручную загружать ничего не нужно.
-      </p>
-      {error && <div className="error">{error}</div>}
-      {open && key && (
-        <>
-          <label>Публичный ключ</label>
-          <textarea className="mono code" readOnly rows={2} value={key.public_key} />
-          <CopyButton text={key.public_key} label="Скопировать публичный ключ" />
-        </>
-      )}
-    </section>
   );
 }
 
