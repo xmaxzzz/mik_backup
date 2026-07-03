@@ -95,6 +95,7 @@ export const api = {
   // backups
   listBackups: (deviceId) =>
     request(deviceId ? `/backups?device_id=${deviceId}` : "/backups"),
+  deleteBackup: (id) => request(`/backups/${id}`, { method: "DELETE" }),
 
   // schedules
   listSchedules: () => request("/schedules"),

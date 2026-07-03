@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { api, ApiError, downloadBackup } from "./api.js";
 import { CopyButton, fmtDate, fmtSize, Modal, StatusDot } from "./ui.jsx";
 
@@ -12,19 +12,39 @@ function openTerminal(device) {
   );
 }
 
+// Copy text to the clipboard, with a fallback for non-secure contexts.
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (_) {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    } catch (_) {
+      return false;
+    }
+  }
+}
+
 const POLL_MS = 10000;
 
 export default function Devices() {
   const [devices, setDevices] = useState([]);
   const [schedules, setSchedules] = useState([]);
-  const [backups, setBackups] = useState([]);
-  const [selected, setSelected] = useState(null);
   const [error, setError] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editing, setEditing] = useState(null);
   const [busyId, setBusyId] = useState(null);
-  const selectedRef = useRef(null);
 
   const refreshDevices = useCallback(async () => {
     try {
@@ -42,19 +62,10 @@ export default function Devices() {
     }
   }, []);
 
-  const refreshBackups = useCallback(async (deviceId) => {
-    try {
-      setBackups(await api.listBackups(deviceId));
-    } catch (err) {
-      setError(err.message);
-    }
-  }, []);
-
   useEffect(() => {
     refreshDevices();
     refreshSchedules();
-    refreshBackups(null);
-  }, [refreshDevices, refreshSchedules, refreshBackups]);
+  }, [refreshDevices, refreshSchedules]);
 
   // live-refresh device list (online dots) every 10s without reloading page
   useEffect(() => {
@@ -70,7 +81,6 @@ export default function Devices() {
     try {
       await api.backupDevice(device.id);
       await refreshDevices();
-      await refreshBackups(selectedRef.current ? selectedRef.current.id : null);
     } catch (err) {
       setError(`Бэкап «${device.name}» не удался: ${err.message}`);
     } finally {
@@ -83,22 +93,10 @@ export default function Devices() {
     setError("");
     try {
       await api.deleteDevice(device.id);
-      if (selected && selected.id === device.id) {
-        setSelected(null);
-        selectedRef.current = null;
-      }
       await refreshDevices();
-      await refreshBackups(selectedRef.current ? selectedRef.current.id : null);
     } catch (err) {
       setError(err.message);
     }
-  }
-
-  function selectDevice(device) {
-    const next = selected && selected.id === device.id ? null : device;
-    setSelected(next);
-    selectedRef.current = next;
-    refreshBackups(next ? next.id : null);
   }
 
   return (
@@ -139,25 +137,15 @@ export default function Devices() {
                 {devices.map((d) => (
                   <tr
                     key={d.id}
-                    className={`row-click${
-                      selected && selected.id === d.id ? " selected" : ""
-                    }`}
-                    onClick={() => selectDevice(d)}
-                    title="Клик по строке — фильтр бэкапов, по имени — редактирование"
+                    className="row-click"
+                    onClick={() => setEditing(d)}
+                    title="Открыть карточку роутера (настройки + бэкапы)"
                   >
                     <td className="dot-cell">
                       <StatusDot online={d.online} lastCheck={d.last_check_at} />
                     </td>
                     <td>
-                      <button
-                        className="link"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditing(d);
-                        }}
-                      >
-                        {d.name}
-                      </button>
+                      <span className="link">{d.name}</span>
                       {d.comment && (
                         <div className="muted small">{d.comment}</div>
                       )}
@@ -227,62 +215,6 @@ export default function Devices() {
       </section>
 
       <SshKeyPanel />
-
-      <section className="card">
-        <div className="card-head">
-          <h2>
-            Бэкапы {selected && <span className="muted">— {selected.name}</span>}
-          </h2>
-          {selected && (
-            <button className="link" onClick={() => selectDevice(selected)}>
-              Показать все
-            </button>
-          )}
-        </div>
-        {backups.length === 0 ? (
-          <p className="muted">Бэкапов пока нет.</p>
-        ) : (
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Когда</th>
-                  <th>Файл</th>
-                  <th>Размер</th>
-                  <th>Я.Диск</th>
-                  <th>Статус</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {backups.map((b) => (
-                  <tr key={b.id}>
-                    <td>{fmtDate(b.created_at)}</td>
-                    <td className="mono">{b.filename}</td>
-                    <td>{fmtSize(b.size_bytes)}</td>
-                    <td>{b.yandex_uploaded ? "☁️" : "—"}</td>
-                    <td>
-                      <span className={`tag ${b.status}`}>
-                        {b.status === "ok" ? "успех" : "ошибка"}
-                      </span>
-                      {b.status === "error" && b.message && (
-                        <div className="muted small">{b.message}</div>
-                      )}
-                    </td>
-                    <td>
-                      {b.status === "ok" && (
-                        <button className="btn small" onClick={() => downloadBackup(b)}>
-                          Скачать
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
 
       {showAdd && (
         <DeviceForm
@@ -394,6 +326,7 @@ function DeviceForm({ device = null, schedules, onClose, onSaved }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [generated, setGenerated] = useState(null); // {password, ready_rsc}
+  const [copied, setCopied] = useState(false); // ready_rsc auto-copied
   const [revealed, setRevealed] = useState(null); // stored password shown
   const [hasPassword, setHasPassword] = useState(device?.has_password || false);
 
@@ -444,6 +377,8 @@ function DeviceForm({ device = null, schedules, onClose, onSaved }) {
       setGenerated(res);
       setRevealed(null);
       setHasPassword(true);
+      // auto-copy the RouterOS script so it can be pasted straight away
+      setCopied(await copyText(res.ready_rsc));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Ошибка генерации");
     } finally {
@@ -584,14 +519,17 @@ function DeviceForm({ device = null, schedules, onClose, onSaved }) {
               <>
                 <div className="notice">
                   Пароль сохранён: <span className="mono">{generated.password}</span>
+                  {copied && " · код скопирован в буфер обмена ✓"}
                 </div>
                 <label>Код для вставки в роутер</label>
                 <pre className="code block">{generated.ready_rsc}</pre>
-                <CopyButton text={generated.ready_rsc} label="Скопировать код" />
+                <CopyButton text={generated.ready_rsc} label="Скопировать код ещё раз" />
               </>
             )}
           </>
         )}
+
+        {!isNew && <DeviceBackups device={device} />}
 
         {error && <div className="error">{error}</div>}
         <button className="btn" disabled={busy || !canSubmit}>
@@ -599,6 +537,117 @@ function DeviceForm({ device = null, schedules, onClose, onSaved }) {
         </button>
       </form>
     </Modal>
+  );
+}
+
+/* --------------------- backups inside the device card --------------------- */
+function DeviceBackups({ device }) {
+  const [backups, setBackups] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const refresh = useCallback(async () => {
+    try {
+      setBackups(await api.listBackups(device.id));
+    } catch (e) {
+      setError(e.message);
+    }
+  }, [device.id]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  async function backupNow() {
+    setError("");
+    setBusy(true);
+    try {
+      await api.backupDevice(device.id);
+    } catch (e) {
+      // a failed backup still records an (error) row — show it below
+      setError(e instanceof ApiError ? e.message : "Бэкап не удался");
+    } finally {
+      await refresh();
+      setBusy(false);
+    }
+  }
+
+  async function del(b) {
+    if (!window.confirm(`Удалить бэкап ${b.filename}?`)) return;
+    setError("");
+    try {
+      await api.deleteBackup(b.id);
+      await refresh();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  return (
+    <>
+      <hr className="sep" />
+      <div className="card-head">
+        <h3>Бэкапы</h3>
+        <button type="button" className="btn small" disabled={busy} onClick={backupNow}>
+          {busy ? "Бэкап…" : "Сделать бэкап сейчас"}
+        </button>
+      </div>
+      {error && <div className="error">{error}</div>}
+      {backups === null ? (
+        <p className="muted small">Загрузка…</p>
+      ) : backups.length === 0 ? (
+        <p className="muted small">Бэкапов пока нет.</p>
+      ) : (
+        <div className="table-scroll" style={{ maxHeight: 240 }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Когда</th>
+                <th>Размер</th>
+                <th>Я.Диск</th>
+                <th>Статус</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {backups.map((b) => (
+                <tr key={b.id}>
+                  <td>{fmtDate(b.created_at)}</td>
+                  <td>{fmtSize(b.size_bytes)}</td>
+                  <td>{b.yandex_uploaded ? "☁️" : "—"}</td>
+                  <td>
+                    <span className={`tag ${b.status}`}>
+                      {b.status === "ok" ? "успех" : "ошибка"}
+                    </span>
+                    {b.status === "error" && b.message && (
+                      <div className="muted small">{b.message}</div>
+                    )}
+                  </td>
+                  <td className="actions">
+                    {b.status === "ok" && (
+                      <button
+                        type="button"
+                        className="btn small"
+                        onClick={() => downloadBackup(b)}
+                      >
+                        Скачать
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn small danger"
+                      onClick={() => del(b)}
+                    >
+                      Удалить
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
   );
 }
 

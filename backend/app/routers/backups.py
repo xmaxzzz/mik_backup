@@ -1,7 +1,7 @@
-"""List and download backups."""
+"""List, download and delete backups."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -45,3 +45,18 @@ def download_backup(backup_id: int, db: Session = Depends(get_db)):
     return FileResponse(
         path, media_type="text/plain", filename=backup.filename
     )
+
+
+@router.delete("/{backup_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_backup(backup_id: int, db: Session = Depends(get_db)):
+    backup = db.get(models.Backup, backup_id)
+    if backup is None:
+        raise HTTPException(status_code=404, detail="Backup not found")
+    device = db.get(models.Device, backup.device_id)
+    if device is not None:
+        try:
+            backup_service.backup_file_path(device, backup).unlink(missing_ok=True)
+        except OSError:
+            pass
+    db.delete(backup)
+    db.commit()
