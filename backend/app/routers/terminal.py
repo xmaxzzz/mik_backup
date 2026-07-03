@@ -6,6 +6,7 @@ API.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, Query, WebSocket
@@ -22,7 +23,10 @@ router = APIRouter(prefix="/terminal", tags=["terminal"])
 
 @router.websocket("/{device_id}")
 async def device_terminal(
-    websocket: WebSocket, device_id: int, token: str = Query(default="")
+    websocket: WebSocket,
+    device_id: int,
+    token: str = Query(default=""),
+    auth: str = Query(default=""),
 ):
     username = decode_access_token(token)
     if not username:
@@ -51,15 +55,35 @@ async def device_terminal(
         db.close()
 
     await websocket.accept()
-    logger.info("Terminal session opened for device %s by %s", device_id, username)
+
+    # One-off login/password mode: the client sends a credentials frame first.
+    # Nothing is stored — used when the app key isn't installed on the router.
+    login_user = dev_username
+    password_override = None
+    if auth == "password":
+        try:
+            creds = await asyncio.wait_for(websocket.receive_json(), timeout=120)
+        except Exception:  # noqa: BLE001 - no creds / disconnect
+            await websocket.close()
+            return
+        login_user = (creds.get("username") or dev_username).strip() or dev_username
+        password_override = creds.get("password") or ""
+
+    logger.info(
+        "Terminal session opened for device %s by %s (%s)",
+        device_id,
+        username,
+        "password" if password_override is not None else auth_type,
+    )
     try:
         await ssh_terminal.bridge(
             websocket,
             host=host,
             port=port,
-            username=dev_username,
+            username=login_user,
             auth_type=auth_type,
             password_enc=password_enc,
+            password_override=password_override,
         )
     finally:
         logger.info("Terminal session closed for device %s", device_id)

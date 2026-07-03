@@ -324,6 +324,23 @@ td.actions {
   font-size: 14px;
   font-weight: 600;
 }
+.term-login-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.term-login-bar input {
+  width: auto;
+  flex: 0 1 220px;
+}
+.term-login-bar .btn {
+  margin-top: 0;
+}
 .term-view {
   flex: 1 1 auto;
   min-height: 0;

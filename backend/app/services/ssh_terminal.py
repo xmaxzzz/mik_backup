@@ -30,7 +30,13 @@ async def bridge(
     username: str,
     auth_type: str,
     password_enc: str,
+    password_override: str | None = None,
 ) -> None:
+    """Bridge a shell to the WebSocket.
+
+    ``password_override`` (plaintext, not stored) forces a one-off password
+    login — used when the key isn't installed on the router yet.
+    """
     loop = asyncio.get_running_loop()
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -45,7 +51,9 @@ async def bridge(
         look_for_keys=False,
         allow_agent=False,
     )
-    if auth_type == "key":
+    if password_override is not None:
+        connect_kwargs["password"] = password_override
+    elif auth_type == "key":
         connect_kwargs["pkey"] = ssh_keys.load_private_key()
     else:
         connect_kwargs["password"] = (
@@ -54,7 +62,18 @@ async def bridge(
 
     try:
         await loop.run_in_executor(None, lambda: client.connect(**connect_kwargs))
+    except paramiko.AuthenticationException:
+        await _safe_send_json(websocket, {"type": "conn_failed", "auth": True})
+        await _safe_send_text(
+            websocket,
+            f"\r\n\x1b[31m*** Ошибка аутентификации для {username}@{host}:{port}."
+            f"\x1b[0m\r\n",
+        )
+        await _safe_close(websocket)
+        client.close()
+        return
     except Exception as exc:  # noqa: BLE001 - report any connect failure to the UI
+        await _safe_send_json(websocket, {"type": "conn_failed", "auth": False})
         await _safe_send_text(
             websocket, f"\r\n\x1b[31m*** Не удалось подключиться к {host}:{port}: "
             f"{exc}\x1b[0m\r\n"
@@ -147,6 +166,12 @@ async def _safe_send_text(websocket: WebSocket, text: str) -> None:
             await websocket.send_text(text)
     except Exception:  # noqa: BLE001
         pass
+
+
+async def _safe_send_json(websocket: WebSocket, obj: dict) -> None:
+    # sent as a text frame; the client parses text frames that are JSON with a
+    # "type" field as control messages, everything else is terminal output.
+    await _safe_send_text(websocket, json.dumps(obj))
 
 
 async def _safe_close(websocket: WebSocket) -> None:

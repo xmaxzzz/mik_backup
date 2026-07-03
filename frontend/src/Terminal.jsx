@@ -5,9 +5,9 @@ import "@xterm/xterm/css/xterm.css";
 import { api, getToken } from "./api.js";
 
 // The xterm instance + WebSocket bridge. Fills its parent container.
-// Keystrokes/paste are sent as binary frames, resize as a JSON text frame;
-// device output arrives as binary frames.
-export function TerminalView({ device, generation = 0 }) {
+// `credentials` (optional) => connect with a one-off login/password instead of
+// the device's configured auth. `onConnFailed` fires on a failed connection.
+export function TerminalView({ device, credentials = null, generation = 0, onConnFailed }) {
   const hostRef = useRef(null);
 
   useEffect(() => {
@@ -21,7 +21,6 @@ export function TerminalView({ device, generation = 0 }) {
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(hostRef.current);
-    // let layout settle before the first fit (real window has real size)
     requestAnimationFrame(() => {
       try {
         fit.fit();
@@ -32,9 +31,10 @@ export function TerminalView({ device, generation = 0 }) {
     });
 
     const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    const url = `${proto}://${window.location.host}/api/terminal/${device.id}?token=${encodeURIComponent(
+    let url = `${proto}://${window.location.host}/api/terminal/${device.id}?token=${encodeURIComponent(
       getToken()
     )}`;
+    if (credentials) url += "&auth=password";
     const ws = new WebSocket(url);
     ws.binaryType = "arraybuffer";
 
@@ -46,14 +46,39 @@ export function TerminalView({ device, generation = 0 }) {
     };
 
     ws.onopen = () => {
+      // password mode: the server reads this credentials frame FIRST
+      if (credentials) {
+        ws.send(
+          JSON.stringify({
+            type: "credentials",
+            username: credentials.username,
+            password: credentials.password,
+          })
+        );
+      }
       sendResize();
       term.onData((data) => {
         if (ws.readyState === WebSocket.OPEN) ws.send(enc.encode(data));
       });
     };
     ws.onmessage = (ev) => {
-      if (typeof ev.data === "string") term.write(ev.data);
-      else term.write(new Uint8Array(ev.data));
+      if (typeof ev.data === "string") {
+        // text frames that are JSON with a "type" are control messages
+        let ctrl = null;
+        try {
+          const o = JSON.parse(ev.data);
+          if (o && typeof o === "object" && o.type) ctrl = o;
+        } catch (_) {
+          /* plain terminal text */
+        }
+        if (ctrl) {
+          if (ctrl.type === "conn_failed" && onConnFailed) onConnFailed(ctrl);
+          return;
+        }
+        term.write(ev.data);
+      } else {
+        term.write(new Uint8Array(ev.data));
+      }
     };
     ws.onclose = () =>
       term.write("\r\n\x1b[33m*** Соединение закрыто ***\x1b[0m\r\n");
@@ -81,7 +106,8 @@ export function TerminalView({ device, generation = 0 }) {
       }
       term.dispose();
     };
-    // `generation` bump forces a full reconnect (Reconnect button)
+    // `generation` bump forces a full reconnect (Reconnect / auth change)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [device.id, generation]);
 
   return <div className="term-view" ref={hostRef} />;
@@ -92,6 +118,11 @@ export default function TerminalPage({ deviceId }) {
   const [device, setDevice] = useState(null);
   const [error, setError] = useState("");
   const [generation, setGeneration] = useState(0);
+  const [credentials, setCredentials] = useState(null); // active password creds
+  const [showLogin, setShowLogin] = useState(false);
+  const [hint, setHint] = useState("");
+  const [formUser, setFormUser] = useState("");
+  const [formPass, setFormPass] = useState("");
 
   useEffect(() => {
     if (!getToken()) {
@@ -107,10 +138,39 @@ export default function TerminalPage({ deviceId }) {
           return;
         }
         setDevice(d);
+        setFormUser(d.username);
         document.title = `SSH — ${d.name}`;
       })
       .catch((e) => setError(e.message));
   }, [deviceId]);
+
+  function onConnFailed(ctrl) {
+    // offer login/password unless we're already trying password auth
+    if (!credentials) {
+      setShowLogin(true);
+      setHint(
+        ctrl.auth
+          ? "Ключ не установлен или не принят. Подключитесь по логину и паролю."
+          : "Не удалось подключиться. Можно попробовать логин/пароль."
+      );
+    }
+  }
+
+  function connectWithPassword(e) {
+    e.preventDefault();
+    setCredentials({ username: formUser, password: formPass });
+    setShowLogin(false);
+    setHint("");
+    setGeneration((g) => g + 1);
+  }
+
+  function connectWithKey() {
+    setCredentials(null);
+    setShowLogin(false);
+    setHint("");
+    setFormPass("");
+    setGeneration((g) => g + 1);
+  }
 
   return (
     <div className="term-page">
@@ -121,32 +181,84 @@ export default function TerminalPage({ deviceId }) {
             <>
               SSH — {device.name}{" "}
               <span className="mono muted">
-                {device.username}@{device.host}:{device.port}
+                {(credentials ? credentials.username : device.username)}@{device.host}:
+                {device.port}
               </span>
+              {credentials && <span className="tag ok">по паролю</span>}
             </>
           ) : (
             "SSH-терминал"
           )}
         </div>
         <div className="topbar-right">
-          <span className="muted small">вставка: Ctrl+Shift+V / правая кнопка</span>
           {device && (
-            <button
-              className="btn small secondary"
-              onClick={() => setGeneration((g) => g + 1)}
-            >
-              Переподключиться
-            </button>
+            <>
+              {credentials ? (
+                <button className="btn small secondary" onClick={connectWithKey}>
+                  По ключу
+                </button>
+              ) : (
+                <button
+                  className="btn small secondary"
+                  onClick={() => setShowLogin((s) => !s)}
+                >
+                  По логину/паролю
+                </button>
+              )}
+              <button
+                className="btn small secondary"
+                onClick={() => setGeneration((g) => g + 1)}
+              >
+                Переподключиться
+              </button>
+            </>
           )}
           <button className="btn small" onClick={() => window.close()}>
             Закрыть
           </button>
         </div>
       </header>
+
+      {device && showLogin && (
+        <form className="term-login-bar" onSubmit={connectWithPassword}>
+          {hint && <span className="muted small">{hint}</span>}
+          <input
+            placeholder="логин"
+            value={formUser}
+            onChange={(e) => setFormUser(e.target.value)}
+          />
+          <input
+            type="password"
+            placeholder="пароль"
+            value={formPass}
+            autoFocus
+            onChange={(e) => setFormPass(e.target.value)}
+          />
+          <button className="btn small" disabled={!formUser || !formPass}>
+            Подключиться
+          </button>
+          <button
+            type="button"
+            className="btn small secondary"
+            onClick={() => {
+              setShowLogin(false);
+              setHint("");
+            }}
+          >
+            Отмена
+          </button>
+        </form>
+      )}
+
       {error ? (
         <div className="center muted">{error}</div>
       ) : device ? (
-        <TerminalView device={device} generation={generation} />
+        <TerminalView
+          device={device}
+          credentials={credentials}
+          generation={generation}
+          onConnFailed={onConnFailed}
+        />
       ) : (
         <div className="center muted">Подключение…</div>
       )}
