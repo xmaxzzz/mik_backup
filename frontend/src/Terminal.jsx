@@ -4,6 +4,11 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { api, getToken } from "./api.js";
 
+// Defaults for the login/password fallback (a not-yet-provisioned router is
+// typically still on SSH port 22 with the admin user, not backuser/10322).
+const FALLBACK_USER = "butler";
+const FALLBACK_PORT = "22";
+
 // The xterm instance + WebSocket bridge. Fills its parent container.
 // `credentials` (optional) => connect with a one-off login/password instead of
 // the device's configured auth. `onConnFailed` fires on a failed connection.
@@ -122,9 +127,9 @@ export default function TerminalPage({ deviceId }) {
   const [credentials, setCredentials] = useState(null); // active password creds
   const [showLogin, setShowLogin] = useState(false);
   const [hint, setHint] = useState("");
-  const [formUser, setFormUser] = useState("");
+  const [formUser, setFormUser] = useState(FALLBACK_USER);
   const [formPass, setFormPass] = useState("");
-  const [formPort, setFormPort] = useState("");
+  const [formPort, setFormPort] = useState(FALLBACK_PORT);
 
   useEffect(() => {
     if (!getToken()) {
@@ -140,8 +145,9 @@ export default function TerminalPage({ deviceId }) {
           return;
         }
         setDevice(d);
-        setFormUser(d.username);
-        setFormPort(String(d.port));
+        // fallback login defaults: butler / port 22 (unprovisioned router)
+        setFormUser(FALLBACK_USER);
+        setFormPort(FALLBACK_PORT);
         document.title = `SSH — ${d.name}`;
       })
       .catch((e) => setError(e.message));
