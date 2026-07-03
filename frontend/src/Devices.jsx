@@ -45,6 +45,7 @@ export default function Devices() {
   const [showImport, setShowImport] = useState(false);
   const [editing, setEditing] = useState(null);
   const [busyId, setBusyId] = useState(null);
+  const [filter, setFilter] = useState("");
 
   const refreshDevices = useCallback(async () => {
     try {
@@ -99,6 +100,15 @@ export default function Devices() {
     }
   }
 
+  const q = filter.trim().toLowerCase();
+  const shown = q
+    ? devices.filter((d) =>
+        [d.name, d.host, d.comment].some(
+          (v) => v && v.toLowerCase().includes(q)
+        )
+      )
+    : devices;
+
   return (
     <>
       {error && <div className="error banner">{error}</div>}
@@ -115,10 +125,30 @@ export default function Devices() {
             </button>
           </div>
         </div>
+        {devices.length > 0 && (
+          <div className="filter-row">
+            <input
+              className="filter-input"
+              placeholder="Поиск по имени или IP…"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            />
+            {q && (
+              <span className="muted small">
+                {shown.length} из {devices.length}
+                <button className="link" onClick={() => setFilter("")}>
+                  сбросить
+                </button>
+              </span>
+            )}
+          </div>
+        )}
         {devices.length === 0 ? (
           <p className="muted">
             Пока нет устройств. Добавьте роутер Mikrotik, чтобы начать бэкапить.
           </p>
+        ) : shown.length === 0 ? (
+          <p className="muted">Ничего не найдено по запросу «{filter}».</p>
         ) : (
           <div className="table-scroll">
             <table>
@@ -134,7 +164,7 @@ export default function Devices() {
                 </tr>
               </thead>
               <tbody>
-                {devices.map((d) => (
+                {shown.map((d) => (
                   <tr
                     key={d.id}
                     className="row-click"

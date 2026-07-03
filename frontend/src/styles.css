@@ -571,6 +571,21 @@ textarea.code {
   resize: vertical;
 }
 
+/* --- quick filter --- */
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.filter-input {
+  flex: 0 1 340px;
+  margin: 0;
+}
+.filter-row .link {
+  margin-left: 8px;
+}
+
 /* --- responsive tables --- */
 .table-scroll {
   overflow-x: auto;
