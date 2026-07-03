@@ -77,18 +77,21 @@ def random_password(length: int = 20) -> str:
 def build_ready_rsc(port: int, password: str, user: str = "backuser") -> str:
     """Per-device RouterOS script: create the backup account + import the key.
 
-    The password is the device's stored account password (generated from the
-    device card). The app itself logs in with the SSH key for key-auth devices.
+    The key file is created ON the router by the script itself (print-to-file
+    + set contents — works on both ROS6 and ROS7), so nothing is uploaded
+    manually. ``/user ssh-keys import`` deletes the file after a successful
+    import. The password is the device's stored account password (generated
+    from the device card); the app itself logs in with the SSH key.
     """
     pub = get_public_key()
     return f"""# --- Mikrotik Backup: enable key-based access ---
-# 1) Upload the public key file (below) to the router's Files as "backup_key.pub".
-#    Public key:
-#    {pub}
-#
-# 2) Then run in the router terminal. The {user} password below is stored
-#    (encrypted) in the backup system — view it any time in the device card.
-/ip service set ssh port={port} address=""
+# Paste the whole block into the router terminal. The key file is created
+# right on the router - nothing to upload manually. The {user} password is
+# stored (encrypted) in the backup system - view it any time in the device card.
+/file print file=backup_key
+:delay 2s
+/file set backup_key.txt contents="{pub}"
 /user add name={user} group=full password="{password}"
-/user/ssh-keys import public-key-file=backup_key.pub user={user}
+/user ssh-keys import public-key-file=backup_key.txt user={user}
+/ip service set ssh port={port} address=""
 """

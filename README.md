@@ -136,13 +136,17 @@ On first start the app generates an **ED25519** keypair (private key in
 `data/ssh/`, chmod 600). Provisioning is per device: open the device card and
 click **«Сгенерировать пароль»** — the app stores a random account password for
 that device (Fernet-encrypted, viewable any time via «Показать пароль») and
-produces a ready-to-paste RouterOS script:
+produces a ready-to-paste RouterOS script. Nothing is uploaded manually — the
+script creates the key file right on the router (works on ROS6 and ROS7;
+`import` removes the file afterwards):
 
 ```
-# upload the public key (from the SSH-key panel) to Files as backup_key.pub, then:
-/ip service set ssh port=<device port> address=""
+/file print file=backup_key
+:delay 2s
+/file set backup_key.txt contents="ssh-ed25519 AAAA... mik-backup"
 /user add name=backuser group=full password="<generated & stored>"
-/user/ssh-keys import public-key-file=backup_key.pub user=backuser
+/user ssh-keys import public-key-file=backup_key.txt user=backuser
+/ip service set ssh port=<device port> address=""
 ```
 
 The app logs into key-auth devices with the SSH key — the stored password is
