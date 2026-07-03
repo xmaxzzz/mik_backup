@@ -33,17 +33,19 @@ export function Modal({ title, onClose, children, wide = false, medium = false }
 }
 
 // Colored availability indicator: green online, red offline, grey unknown.
-export function StatusDot({ online, lastCheck }) {
+export function StatusDot({ online, lastCheck, latencyMs }) {
   const state = online === true ? "online" : online === false ? "offline" : "unknown";
   const label =
     state === "online" ? "онлайн" : state === "offline" ? "офлайн" : "не проверялось";
+  const ping =
+    state === "online" && latencyMs != null ? ` · ${latencyMs} мс` : "";
   const when = lastCheck ? `, проверено ${fmtDate(lastCheck)}` : "";
   return (
     <span
       className={`status-dot ${state}`}
       role="img"
       aria-label={label}
-      title={`${label}${when}`}
+      title={`${label}${ping}${when}`}
     />
   );
 }

@@ -172,7 +172,11 @@ export default function Devices() {
                     title="Открыть карточку роутера (настройки + бэкапы)"
                   >
                     <td className="dot-cell">
-                      <StatusDot online={d.online} lastCheck={d.last_check_at} />
+                      <StatusDot
+                        online={d.online}
+                        lastCheck={d.last_check_at}
+                        latencyMs={d.latency_ms}
+                      />
                     </td>
                     <td>
                       <span className="link">{d.name}</span>
@@ -182,6 +186,9 @@ export default function Devices() {
                     </td>
                     <td className="mono">
                       {d.host}:{d.port}
+                      {d.online && d.latency_ms != null && (
+                        <span className="muted small"> · {d.latency_ms} мс</span>
+                      )}
                     </td>
                     <td>
                       {d.auth_type === "key" ? "🔑 ключ" : "🔒 пароль"}{" "}

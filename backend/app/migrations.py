@@ -23,6 +23,7 @@ _COLUMNS: dict[str, dict[str, str]] = {
         "comment": "TEXT DEFAULT ''",
         "schedule_id": "INTEGER",
         "online": "BOOLEAN",
+        "latency_ms": "INTEGER",
         "last_check_at": "DATETIME",
     },
     "backups": {

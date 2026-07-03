@@ -40,6 +40,7 @@ def _to_out(device: models.Device) -> schemas.DeviceOut:
         schedule_id=device.schedule_id,
         schedule_name=device.schedule.name if device.schedule else None,
         online=device.online,
+        latency_ms=device.latency_ms,
         last_check_at=device.last_check_at,
         created_at=device.created_at,
         last_backup_at=latest.created_at if latest else None,

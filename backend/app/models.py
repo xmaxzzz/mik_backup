@@ -57,6 +57,7 @@ class Device(Base):
     )
     # live reachability (TCP), independent of backup status
     online: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     last_check_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 

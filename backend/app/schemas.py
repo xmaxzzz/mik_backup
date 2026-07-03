@@ -103,6 +103,7 @@ class DeviceOut(BaseModel):
     schedule_id: int | None = None
     schedule_name: str | None = None
     online: bool | None = None
+    latency_ms: int | None = None
     last_check_at: datetime | None = None
     created_at: datetime
     last_backup_at: datetime | None = None

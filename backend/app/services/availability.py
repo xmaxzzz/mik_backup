@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import socket
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
@@ -17,16 +18,18 @@ _CONNECT_TIMEOUT = 4.0
 _MAX_WORKERS = 32
 
 
-def _tcp_ok(host: str, port: int) -> bool:
+def _tcp_probe(host: str, port: int) -> tuple[bool, int | None]:
+    """Return (reachable, latency_ms). Latency = time to open the TCP socket."""
+    t0 = time.perf_counter()
     try:
         with socket.create_connection((host, port), timeout=_CONNECT_TIMEOUT):
-            return True
+            return True, max(0, round((time.perf_counter() - t0) * 1000))
     except OSError:
-        return False
+        return False, None
 
 
 def check_all(db: Session | None = None) -> int:
-    """Probe every device's host:port and store online + last_check_at."""
+    """Probe every device's host:port and store online + latency + checked-at."""
     own_session = db is None
     db = db or SessionLocal()
     try:
@@ -37,12 +40,14 @@ def check_all(db: Session | None = None) -> int:
         workers = min(_MAX_WORKERS, len(targets))
         with ThreadPoolExecutor(max_workers=workers) as pool:
             results = list(
-                pool.map(lambda t: (t[0], _tcp_ok(t[1], t[2])), targets)
+                pool.map(lambda t: (t[0], _tcp_probe(t[1], t[2])), targets)
             )
         now = datetime.now(timezone.utc)
-        online_by_id = dict(results)
+        by_id = dict(results)
         for device in devices:
-            device.online = online_by_id.get(device.id)
+            ok, latency = by_id.get(device.id, (None, None))
+            device.online = ok
+            device.latency_ms = latency
             device.last_check_at = now
         db.commit()
         return len(devices)
