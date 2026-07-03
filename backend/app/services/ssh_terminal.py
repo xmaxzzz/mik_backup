@@ -38,10 +38,7 @@ async def bridge(
     login — used when the key isn't installed on the router yet.
     """
     loop = asyncio.get_running_loop()
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
-    connect_kwargs = dict(
+    base_kwargs = dict(
         hostname=host,
         port=port,
         username=username,
@@ -51,35 +48,46 @@ async def bridge(
         look_for_keys=False,
         allow_agent=False,
     )
+    # one auth attempt per key in its OWN connection (RouterOS drops the session
+    # after a rejected key, so several keys in one session never fall through)
     if password_override is not None:
-        connect_kwargs["password"] = password_override
+        attempts = [{"password": password_override}]
     elif auth_type == "key":
-        connect_kwargs["key_filename"] = ssh_keys.private_key_files()
+        attempts = [{"key_filename": [kf]} for kf in ssh_keys.private_key_files()]
     else:
-        connect_kwargs["password"] = (
-            decrypt_secret(password_enc) if password_enc else ""
-        )
+        attempts = [{"password": decrypt_secret(password_enc) if password_enc else ""}]
 
-    try:
-        await loop.run_in_executor(None, lambda: client.connect(**connect_kwargs))
-    except paramiko.AuthenticationException:
-        await _safe_send_json(websocket, {"type": "conn_failed", "auth": True})
-        await _safe_send_text(
-            websocket,
-            f"\r\n\x1b[31m*** Ошибка аутентификации для {username}@{host}:{port}."
-            f"\x1b[0m\r\n",
+    client = None
+    last_exc: Exception | None = None
+    for auth in attempts:
+        c = paramiko.SSHClient()
+        c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            await loop.run_in_executor(
+                None, lambda a=auth, cl=c: cl.connect(**base_kwargs, **a)
+            )
+            client = c
+            break
+        except Exception as exc:  # noqa: BLE001 - try the next key/auth
+            last_exc = exc
+            c.close()
+
+    if client is None:
+        # RouterOS drops the session on a rejected key (SSHException, not
+        # AuthenticationException) — treat any key-auth failure as auth-related
+        # so the UI offers the login/password fallback with the right hint.
+        is_auth = (
+            isinstance(last_exc, paramiko.AuthenticationException)
+            or (auth_type == "key" and password_override is None)
         )
-        await _safe_close(websocket)
-        client.close()
-        return
-    except Exception as exc:  # noqa: BLE001 - report any connect failure to the UI
-        await _safe_send_json(websocket, {"type": "conn_failed", "auth": False})
-        await _safe_send_text(
-            websocket, f"\r\n\x1b[31m*** Не удалось подключиться к {host}:{port}: "
-            f"{exc}\x1b[0m\r\n"
+        await _safe_send_json(websocket, {"type": "conn_failed", "auth": is_auth})
+        msg = (
+            f"Ошибка аутентификации для {username}@{host}:{port}."
+            if is_auth
+            else f"Не удалось подключиться к {host}:{port}: {last_exc}"
         )
+        await _safe_send_text(websocket, f"\r\n\x1b[31m*** {msg}\x1b[0m\r\n")
         await _safe_close(websocket)
-        client.close()
         return
 
     chan = client.invoke_shell(term="xterm-256color", width=120, height=30)

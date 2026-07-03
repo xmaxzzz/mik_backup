@@ -6,8 +6,6 @@ the most portable approach: it needs only SSH access (no FTP/SCP of binary
 """
 from __future__ import annotations
 
-import socket
-
 import paramiko
 
 # ``/export`` hides secrets by default on modern RouterOS. ``show-sensitive``
@@ -33,40 +31,52 @@ def fetch_config(
 ) -> str:
     """Return the RouterOS config export text, or raise BackupError.
 
-    Authenticates with ``key_files`` (paramiko tries each) when provided,
-    otherwise with ``password``.
+    With ``key_files`` each key is tried in its OWN connection — RouterOS
+    disconnects after the first rejected public key, so offering several keys
+    in one session ("No existing session") never reaches the second key.
     """
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    try:
-        client.connect(
-            hostname=host,
-            port=port,
-            username=username,
-            password=password if not key_files else None,
-            key_filename=key_files or None,
-            timeout=_CONNECT_TIMEOUT,
-            banner_timeout=_CONNECT_TIMEOUT,
-            auth_timeout=_CONNECT_TIMEOUT,
-            look_for_keys=False,
-            allow_agent=False,
-        )
-    except paramiko.AuthenticationException as exc:
-        raise BackupError(f"Authentication failed for {username}@{host}") from exc
-    except (paramiko.SSHException, socket.error, OSError) as exc:
-        raise BackupError(f"Cannot connect to {host}:{port}: {exc}") from exc
+    # one auth attempt per key (separate connection), or a single password auth
+    if key_files:
+        attempts = [{"key_filename": [kf]} for kf in key_files]
+    else:
+        attempts = [{"password": password}]
 
-    try:
-        output = _run(client, _EXPORT_CMD)
-        if not output.strip():
-            output = _run(client, _EXPORT_FALLBACK)
-    finally:
-        client.close()
+    last_exc: Exception | None = None
+    for auth in attempts:
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            client.connect(
+                hostname=host,
+                port=port,
+                username=username,
+                timeout=_CONNECT_TIMEOUT,
+                banner_timeout=_CONNECT_TIMEOUT,
+                auth_timeout=_CONNECT_TIMEOUT,
+                look_for_keys=False,
+                allow_agent=False,
+                **auth,
+            )
+        except Exception as exc:  # noqa: BLE001 - try the next key/auth
+            last_exc = exc
+            client.close()
+            continue
 
-    text = output.strip()
-    if not text:
-        raise BackupError("Empty configuration returned by device")
-    return text + "\n"
+        try:
+            output = _run(client, _EXPORT_CMD)
+            if not output.strip():
+                output = _run(client, _EXPORT_FALLBACK)
+        finally:
+            client.close()
+
+        text = output.strip()
+        if not text:
+            raise BackupError("Empty configuration returned by device")
+        return text + "\n"
+
+    if isinstance(last_exc, paramiko.AuthenticationException):
+        raise BackupError(f"Authentication failed for {username}@{host}") from last_exc
+    raise BackupError(f"Cannot connect to {host}:{port}: {last_exc}") from last_exc
 
 
 def _run(client: paramiko.SSHClient, command: str) -> str:
