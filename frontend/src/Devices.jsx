@@ -407,6 +407,7 @@ function DeviceForm({ device = null, schedules, onClose, onSaved }) {
     <Modal
       title={isNew ? "Добавить устройство" : "Изменить устройство"}
       onClose={onClose}
+      medium={!isNew}
     >
       <form onSubmit={submit}>
         <label>Имя</label>
@@ -598,7 +599,7 @@ function DeviceBackups({ device }) {
       ) : backups.length === 0 ? (
         <p className="muted small">Бэкапов пока нет.</p>
       ) : (
-        <div className="table-scroll" style={{ maxHeight: 240 }}>
+        <div className="table-scroll dev-backups" style={{ maxHeight: 240 }}>
           <table>
             <thead>
               <tr>

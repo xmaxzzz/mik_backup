@@ -12,11 +12,12 @@ export function fmtSize(n) {
   return kb < 1024 ? `${kb.toFixed(1)} KB` : `${(kb / 1024).toFixed(1)} MB`;
 }
 
-export function Modal({ title, onClose, children, wide = false }) {
+export function Modal({ title, onClose, children, wide = false, medium = false }) {
+  const size = wide ? " wide" : medium ? " medium" : "";
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
-        className={`modal${wide ? " wide" : ""}`}
+        className={`modal${size}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-head">

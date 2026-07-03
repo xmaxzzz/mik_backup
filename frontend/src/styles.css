@@ -284,6 +284,25 @@ td.actions {
 .modal.wide {
   width: 720px;
 }
+.modal.medium {
+  width: 600px;
+}
+
+/* backups table inside the device card — compact, no horizontal scroll */
+.dev-backups table {
+  table-layout: auto;
+}
+.dev-backups th,
+.dev-backups td {
+  white-space: nowrap;
+  padding: 6px 8px;
+}
+.dev-backups td.actions {
+  gap: 6px;
+}
+.dev-backups .btn.small {
+  padding: 4px 8px;
+}
 /* --- full-window SSH terminal page (/terminal/{id}) --- */
 .term-page {
   height: 100vh;
