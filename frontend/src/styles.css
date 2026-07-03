@@ -282,6 +282,21 @@ td.actions {
 .modal.wide {
   width: 720px;
 }
+.modal.term-modal {
+  width: min(1100px, 96vw);
+  max-width: 96vw;
+}
+.term-host {
+  height: min(70vh, 620px);
+  background: #0b0f18;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 6px;
+  overflow: hidden;
+}
+.term-host .xterm {
+  height: 100%;
+}
 
 /* --- select / textarea share input styling --- */
 select,

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, downloadBackup } from "./api.js";
 import { CopyButton, fmtDate, fmtSize, Modal, StatusDot } from "./ui.jsx";
+import Terminal from "./Terminal.jsx";
 
 const POLL_MS = 10000;
 
@@ -13,6 +14,7 @@ export default function Devices() {
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [terminalDevice, setTerminalDevice] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const selectedRef = useRef(null);
 
@@ -179,6 +181,16 @@ export default function Devices() {
                     </td>
                     <td className="actions">
                       <button
+                        className="btn small secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTerminalDevice(d);
+                        }}
+                        title="Открыть SSH-терминал"
+                      >
+                        SSH
+                      </button>
+                      <button
                         className="btn small"
                         disabled={busyId === d.id}
                         onClick={(e) => {
@@ -293,6 +305,12 @@ export default function Devices() {
             setShowImport(false);
             await refreshDevices();
           }}
+        />
+      )}
+      {terminalDevice && (
+        <Terminal
+          device={terminalDevice}
+          onClose={() => setTerminalDevice(null)}
         />
       )}
     </>

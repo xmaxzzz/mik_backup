@@ -21,6 +21,7 @@ from .routers import (
     schedules,
     settings as settings_router,
     ssh,
+    terminal,
     yandex,
 )
 from .security import hash_password
@@ -79,6 +80,7 @@ app.include_router(schedules.router, prefix=api_prefix)
 app.include_router(settings_router.router, prefix=api_prefix)
 app.include_router(yandex.router, prefix=api_prefix)
 app.include_router(ssh.router, prefix=api_prefix)
+app.include_router(terminal.router, prefix=api_prefix)
 
 
 # --- Static SPA ---

@@ -23,6 +23,7 @@ Telegram.
 - 🟢 **Live online/offline dot** per device (parallel TCP reachability probe, independent of backup status), auto-refreshing in the UI
 - ☁️ **Yandex.Disk** integration — OAuth connect + folder picker; every backup is mirrored to `<folder>/<device>/`
 - 📨 **Telegram** notifications on every backup (success / error) + test button
+- 🖥 **In-browser SSH terminal** per device (xterm.js over WebSocket, key/password auth, copy-paste)
 - 📥 **Bulk CSV import** of devices (preview → confirm)
 - 🗂 Per-device backup history with download
 - 🔒 Device passwords + Yandex/Telegram tokens encrypted with Fernet — never in plaintext
@@ -178,6 +179,18 @@ In **Настройки → Telegram** enter the bot token and chat id, then **�
 reason) message is sent via `sendMessage` (HTML).
 
 ---
+
+## SSH terminal
+
+Each device row has an **SSH** button that opens an in-browser terminal
+(xterm.js) connected to the router over a WebSocket (`/api/terminal/{id}`).
+The backend opens an interactive PTY via paramiko using the same auth as
+backups — the shared application key for key-auth devices, or the stored
+password otherwise. Copy-paste works (Ctrl+Shift+V or right-click), and the
+terminal resizes with the window. The WebSocket is authenticated with the
+JWT passed as a `?token=` query parameter (browsers can't set an
+Authorization header on a WebSocket handshake) and is proxied transparently
+by Caddy.
 
 ## CSV import
 
