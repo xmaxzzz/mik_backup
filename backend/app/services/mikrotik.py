@@ -9,7 +9,6 @@ from __future__ import annotations
 import socket
 
 import paramiko
-from paramiko.pkey import PKey
 
 # ``/export`` hides secrets by default on modern RouterOS. ``show-sensitive``
 # includes them so the backup can actually be restored. Falls back gracefully
@@ -30,11 +29,12 @@ def fetch_config(
     port: int,
     username: str,
     password: str | None = None,
-    pkey: PKey | None = None,
+    key_files: list[str] | None = None,
 ) -> str:
     """Return the RouterOS config export text, or raise BackupError.
 
-    Authenticates with ``pkey`` when provided, otherwise with ``password``.
+    Authenticates with ``key_files`` (paramiko tries each) when provided,
+    otherwise with ``password``.
     """
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -43,8 +43,8 @@ def fetch_config(
             hostname=host,
             port=port,
             username=username,
-            password=password if pkey is None else None,
-            pkey=pkey,
+            password=password if not key_files else None,
+            key_filename=key_files or None,
             timeout=_CONNECT_TIMEOUT,
             banner_timeout=_CONNECT_TIMEOUT,
             auth_timeout=_CONNECT_TIMEOUT,

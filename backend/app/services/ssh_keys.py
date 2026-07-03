@@ -1,18 +1,20 @@
-"""Manage the shared application SSH key used for key-based device auth.
+"""Manage the shared application SSH keys used for key-based device auth.
 
-On first start an ED25519 keypair is generated. The private key lives in the
-data volume (chmod 600, never in git); the public key is handed to the user to
-install on each RouterOS device.
+On first start an RSA keypair (universally importable on every RouterOS
+version) and an ED25519 keypair are generated. Private keys live in the data
+volume (chmod 600, never in git). The provisioning script installs the RSA
+public key, since older RouterOS (6.x / early 7.x) can't import ed25519 keys
+("unable to load key file"). When connecting, the app offers both keys, so
+devices already provisioned with the ed25519 key keep working.
 """
 from __future__ import annotations
 
 import logging
 import secrets
 import string
-from functools import lru_cache
 
-import paramiko
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from ..config import get_settings
@@ -23,47 +25,85 @@ settings = get_settings()
 _COMMENT = "mik-backup"
 
 
-def _priv_path():
+def _ed_priv():
     return settings.ssh_dir / "id_ed25519"
 
 
-def _pub_path():
+def _ed_pub():
     return settings.ssh_dir / "id_ed25519.pub"
 
 
-def ensure_keys() -> None:
-    """Generate the ED25519 keypair if it does not exist yet."""
-    priv, pub = _priv_path(), _pub_path()
-    if priv.exists() and pub.exists():
-        return
-    key = Ed25519PrivateKey.generate()
-    priv_bytes = key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.OpenSSH,
-        encryption_algorithm=serialization.NoEncryption(),
-    )
-    pub_bytes = key.public_key().public_bytes(
-        encoding=serialization.Encoding.OpenSSH,
-        format=serialization.PublicFormat.OpenSSH,
-    )
-    priv.write_bytes(priv_bytes)
+def _rsa_priv():
+    return settings.ssh_dir / "id_rsa"
+
+
+def _rsa_pub():
+    return settings.ssh_dir / "id_rsa.pub"
+
+
+def _write_key(priv_path, pub_path, priv_bytes: bytes, pub_bytes: bytes) -> None:
+    priv_path.write_bytes(priv_bytes)
     try:
-        priv.chmod(0o600)
+        priv_path.chmod(0o600)
     except OSError:
         pass
-    pub.write_text(pub_bytes.decode() + f" {_COMMENT}\n", encoding="utf-8")
-    logger.info("Generated ED25519 application SSH key")
+    pub_path.write_text(pub_bytes.decode() + f" {_COMMENT}\n", encoding="utf-8")
+
+
+def ensure_keys() -> None:
+    """Generate the RSA + ED25519 keypairs if they don't exist yet."""
+    if not (_ed_priv().exists() and _ed_pub().exists()):
+        key = Ed25519PrivateKey.generate()
+        _write_key(
+            _ed_priv(),
+            _ed_pub(),
+            key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.OpenSSH,
+                encryption_algorithm=serialization.NoEncryption(),
+            ),
+            key.public_key().public_bytes(
+                encoding=serialization.Encoding.OpenSSH,
+                format=serialization.PublicFormat.OpenSSH,
+            ),
+        )
+        logger.info("Generated ED25519 application SSH key")
+
+    if not (_rsa_priv().exists() and _rsa_pub().exists()):
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        _write_key(
+            _rsa_priv(),
+            _rsa_pub(),
+            key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.OpenSSH,
+                encryption_algorithm=serialization.NoEncryption(),
+            ),
+            key.public_key().public_bytes(
+                encoding=serialization.Encoding.OpenSSH,
+                format=serialization.PublicFormat.OpenSSH,
+            ),
+        )
+        logger.info("Generated RSA application SSH key")
 
 
 def get_public_key() -> str:
+    """RSA public key — the one installed by the provisioning script (works on
+    every RouterOS version, unlike ed25519 on older releases)."""
     ensure_keys()
-    return _pub_path().read_text(encoding="utf-8").strip()
+    return _rsa_pub().read_text(encoding="utf-8").strip()
 
 
-@lru_cache
-def load_private_key() -> paramiko.Ed25519Key:
+def private_key_files() -> list[str]:
+    """Private key files to offer when authenticating (RSA first, then ed25519
+    for devices provisioned before RSA existed)."""
     ensure_keys()
-    return paramiko.Ed25519Key.from_private_key_file(str(_priv_path()))
+    files = []
+    if _rsa_priv().exists():
+        files.append(str(_rsa_priv()))
+    if _ed_priv().exists():
+        files.append(str(_ed_priv()))
+    return files
 
 
 # alphanumeric only: safe to paste into a RouterOS terminal without escaping
@@ -75,14 +115,6 @@ def random_password(length: int = 20) -> str:
 
 
 def build_ready_rsc(port: int, password: str, user: str = "backuser") -> str:
-    """Per-device RouterOS script: create the backup account + import the key.
-
-    The key file is created ON the router by the script itself (print-to-file
-    + set contents — works on both ROS6 and ROS7), so nothing is uploaded
-    manually. ``/user ssh-keys import`` deletes the file after a successful
-    import. The password is the device's stored account password (generated
-    from the device card); the app itself logs in with the SSH key.
-    """
     pub = get_public_key()
     return f"""/ip service enable ssh
 /ip service set ssh port={port} address=""

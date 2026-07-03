@@ -45,7 +45,7 @@ def run_backup(db: Session, device: models.Device) -> models.Backup:
                 host=device.host,
                 port=device.port,
                 username=device.username,
-                pkey=ssh_keys.load_private_key(),
+                key_files=ssh_keys.private_key_files(),
             )
         else:
             password = decrypt_secret(device.password_enc) if device.password_enc else ""

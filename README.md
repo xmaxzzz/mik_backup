@@ -133,20 +133,25 @@ is created and all existing devices are attached to it.
 
 ## SSH-key auth (recommended)
 
-On first start the app generates an **ED25519** keypair (private key in
-`data/ssh/`, chmod 600). Provisioning is per device: open the device card and
-click **«Сгенерировать пароль»** — the app stores a random account password for
-that device (Fernet-encrypted, viewable any time via «Показать пароль») and
-produces a ready-to-paste RouterOS script. Nothing is uploaded manually — the
-script creates the key file right on the router (works on ROS6 and ROS7;
-`import` removes the file afterwards):
+On first start the app generates two keypairs in `data/ssh/` (chmod 600): an
+**RSA** key and an **ED25519** key. The provisioning script installs the **RSA**
+public key because older RouterOS (6.x / early 7.x) can't `ssh-keys import`
+ed25519 keys ("unable to load key file"); RSA import works on every version.
+When connecting, the app offers both keys, so devices provisioned earlier with
+the ed25519 key keep working.
+
+Provisioning is per device: open the device card and click **«Сгенерировать
+пароль»** — the app stores a random account password for that device
+(Fernet-encrypted, viewable via «Показать пароль») and produces a ready-to-paste
+RouterOS script. Nothing is uploaded manually — the script creates the key file
+right on the router (`import` removes the file afterwards):
 
 ```
 /ip service enable ssh
 /ip service set ssh port=<device port> address=""
 /file print file=backup_key
 :delay 2s
-/file set backup_key.txt contents="ssh-ed25519 AAAA... mik-backup"
+/file set backup_key.txt contents="ssh-rsa AAAA... mik-backup"
 /user add name=backuser group=full password="<generated & stored>"
 /user ssh-keys import public-key-file=backup_key.txt user=backuser
 ```

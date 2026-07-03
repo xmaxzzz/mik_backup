@@ -54,7 +54,7 @@ async def bridge(
     if password_override is not None:
         connect_kwargs["password"] = password_override
     elif auth_type == "key":
-        connect_kwargs["pkey"] = ssh_keys.load_private_key()
+        connect_kwargs["key_filename"] = ssh_keys.private_key_files()
     else:
         connect_kwargs["password"] = (
             decrypt_secret(password_enc) if password_enc else ""
