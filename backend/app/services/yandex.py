@@ -39,6 +39,20 @@ def _headers(token: str) -> dict[str, str]:
     return {"Authorization": f"OAuth {token}"}
 
 
+def _norm(path: str) -> str:
+    """Normalize a Disk path for write operations.
+
+    The listing API returns paths like ``disk:/BACKUP/Mikrotik``. The write
+    endpoints (create folder / upload) require a slash-rooted path and reject
+    the ``disk:`` scheme when it ends up as its own segment (``/disk:`` is read
+    as the scheme with an empty path). Strip the scheme and root with ``/``.
+    """
+    p = (path or "").strip()
+    if p.startswith("disk:"):
+        p = p[len("disk:"):]
+    return "/" + p.strip("/")
+
+
 # --------------------------------------------------------------------------- #
 # OAuth
 # --------------------------------------------------------------------------- #
@@ -223,7 +237,7 @@ def create_folder(db: Session, path: str) -> None:
     resp = requests.put(
         f"{DISK_API}/resources",
         headers=_headers(token),
-        params={"path": path},
+        params={"path": _norm(path)},
         timeout=_TIMEOUT,
     )
     if resp.status_code in (201, 409):  # created or already exists
@@ -233,7 +247,7 @@ def create_folder(db: Session, path: str) -> None:
 
 def ensure_folder(db: Session, path: str) -> None:
     """Create every segment of an absolute Disk path, ignoring existing ones."""
-    parts = [p for p in path.strip("/").split("/") if p]
+    parts = [p for p in _norm(path).split("/") if p]
     cur = ""
     for part in parts:
         cur = f"{cur}/{part}"
@@ -248,7 +262,7 @@ def upload_file(db: Session, remote_path: str, data: bytes) -> None:
     resp = requests.get(
         f"{DISK_API}/resources/upload",
         headers=_headers(token),
-        params={"path": remote_path, "overwrite": "true"},
+        params={"path": _norm(remote_path), "overwrite": "true"},
         timeout=_TIMEOUT,
     )
     if resp.status_code != 200:
