@@ -84,14 +84,11 @@ def build_ready_rsc(port: int, password: str, user: str = "backuser") -> str:
     from the device card); the app itself logs in with the SSH key.
     """
     pub = get_public_key()
-    return f"""# --- Mikrotik Backup: enable key-based access ---
-# Paste the whole block into the router terminal. The key file is created
-# right on the router - nothing to upload manually. The {user} password is
-# stored (encrypted) in the backup system - view it any time in the device card.
+    return f"""/ip service enable ssh
+/ip service set ssh port={port} address=""
 /file print file=backup_key
 :delay 2s
 /file set backup_key.txt contents="{pub}"
 /user add name={user} group=full password="{password}"
 /user ssh-keys import public-key-file=backup_key.txt user={user}
-/ip service set ssh port={port} address=""
 """
