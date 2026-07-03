@@ -1,31 +1,35 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
-import { getToken } from "./api.js";
+import { api, getToken } from "./api.js";
 
-// Full-screen-ish modal hosting an interactive SSH terminal for one device.
-// Connects to /api/terminal/{id} over a WebSocket; keystrokes are sent as
-// binary frames, resize as a JSON text frame; device output arrives as binary.
-export default function Terminal({ device, onClose }) {
+// The xterm instance + WebSocket bridge. Fills its parent container.
+// Keystrokes/paste are sent as binary frames, resize as a JSON text frame;
+// device output arrives as binary frames.
+export function TerminalView({ device, generation = 0 }) {
   const hostRef = useRef(null);
-  const termRef = useRef(null);
-  const wsRef = useRef(null);
 
   useEffect(() => {
     const term = new XTerm({
       cursorBlink: true,
       fontFamily: 'ui-monospace, "SFMono-Regular", Consolas, monospace',
-      fontSize: 13,
+      fontSize: 14,
       theme: { background: "#0b0f18", foreground: "#c9d4ea", cursor: "#3b82f6" },
-      scrollback: 5000,
+      scrollback: 8000,
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(hostRef.current);
-    fit.fit();
-    term.focus();
-    termRef.current = term;
+    // let layout settle before the first fit (real window has real size)
+    requestAnimationFrame(() => {
+      try {
+        fit.fit();
+      } catch (_) {
+        /* not mounted */
+      }
+      term.focus();
+    });
 
     const proto = window.location.protocol === "https:" ? "wss" : "ws";
     const url = `${proto}://${window.location.host}/api/terminal/${device.id}?token=${encodeURIComponent(
@@ -33,7 +37,6 @@ export default function Terminal({ device, onClose }) {
     )}`;
     const ws = new WebSocket(url);
     ws.binaryType = "arraybuffer";
-    wsRef.current = ws;
 
     const enc = new TextEncoder();
     const sendResize = () => {
@@ -44,7 +47,6 @@ export default function Terminal({ device, onClose }) {
 
     ws.onopen = () => {
       sendResize();
-      // keystrokes / pasted text -> binary frames
       term.onData((data) => {
         if (ws.readyState === WebSocket.OPEN) ws.send(enc.encode(data));
       });
@@ -53,12 +55,9 @@ export default function Terminal({ device, onClose }) {
       if (typeof ev.data === "string") term.write(ev.data);
       else term.write(new Uint8Array(ev.data));
     };
-    ws.onclose = () => {
+    ws.onclose = () =>
       term.write("\r\n\x1b[33m*** Соединение закрыто ***\x1b[0m\r\n");
-    };
-    ws.onerror = () => {
-      term.write("\r\n\x1b[31m*** Ошибка WebSocket ***\x1b[0m\r\n");
-    };
+    ws.onerror = () => term.write("\r\n\x1b[31m*** Ошибка WebSocket ***\x1b[0m\r\n");
 
     const onResize = () => {
       try {
@@ -82,28 +81,75 @@ export default function Terminal({ device, onClose }) {
       }
       term.dispose();
     };
-  }, [device.id]);
+    // `generation` bump forces a full reconnect (Reconnect button)
+  }, [device.id, generation]);
+
+  return <div className="term-view" ref={hostRef} />;
+}
+
+// Full-window terminal page, opened via window.open("/terminal/{id}").
+export default function TerminalPage({ deviceId }) {
+  const [device, setDevice] = useState(null);
+  const [error, setError] = useState("");
+  const [generation, setGeneration] = useState(0);
+
+  useEffect(() => {
+    if (!getToken()) {
+      setError("Нет активной сессии. Войдите в основном окне и откройте терминал заново.");
+      return;
+    }
+    api
+      .listDevices()
+      .then((list) => {
+        const d = list.find((x) => x.id === deviceId);
+        if (!d) {
+          setError("Устройство не найдено.");
+          return;
+        }
+        setDevice(d);
+        document.title = `SSH — ${d.name}`;
+      })
+      .catch((e) => setError(e.message));
+  }, [deviceId]);
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal term-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <h2>
-            SSH — {device.name}{" "}
-            <span className="muted small mono">
-              {device.username}@{device.host}:{device.port}
-            </span>
-          </h2>
-          <button className="link" onClick={onClose} aria-label="Закрыть">
-            ✕
+    <div className="term-page">
+      <header className="term-page-head">
+        <div className="brand">
+          <span className="dot" />
+          {device ? (
+            <>
+              SSH — {device.name}{" "}
+              <span className="mono muted">
+                {device.username}@{device.host}:{device.port}
+              </span>
+            </>
+          ) : (
+            "SSH-терминал"
+          )}
+        </div>
+        <div className="topbar-right">
+          <span className="muted small">вставка: Ctrl+Shift+V / правая кнопка</span>
+          {device && (
+            <button
+              className="btn small secondary"
+              onClick={() => setGeneration((g) => g + 1)}
+            >
+              Переподключиться
+            </button>
+          )}
+          <button className="btn small" onClick={() => window.close()}>
+            Закрыть
           </button>
         </div>
-        <p className="muted small">
-          Вставка: Ctrl+Shift+V или правой кнопкой мыши. Аутентификация —{" "}
-          {device.auth_type === "key" ? "ключ приложения" : "сохранённый пароль"}.
-        </p>
-        <div className="term-host" ref={hostRef} />
-      </div>
+      </header>
+      {error ? (
+        <div className="center muted">{error}</div>
+      ) : device ? (
+        <TerminalView device={device} generation={generation} />
+      ) : (
+        <div className="center muted">Подключение…</div>
+      )}
     </div>
   );
 }

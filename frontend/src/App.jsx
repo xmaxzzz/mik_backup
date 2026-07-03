@@ -4,6 +4,7 @@ import { Modal } from "./ui.jsx";
 import Devices from "./Devices.jsx";
 import Schedules from "./Schedules.jsx";
 import Settings from "./Settings.jsx";
+import TerminalPage from "./Terminal.jsx";
 
 const TABS = [
   { key: "devices", label: "Устройства" },
@@ -12,6 +13,14 @@ const TABS = [
 ];
 
 export default function App() {
+  // Standalone SSH terminal window: /terminal/{id} — rendered on its own,
+  // outside the dashboard shell (shares the auth token via localStorage).
+  const termMatch = window.location.pathname.match(/^\/terminal\/(\d+)$/);
+  if (termMatch) return <TerminalPage deviceId={Number(termMatch[1])} />;
+  return <AuthedApp />;
+}
+
+function AuthedApp() {
   const [user, setUser] = useState(null);
   const [booting, setBooting] = useState(true);
   const [authError, setAuthError] = useState("");

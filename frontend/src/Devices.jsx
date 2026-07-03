@@ -1,7 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, downloadBackup } from "./api.js";
 import { CopyButton, fmtDate, fmtSize, Modal, StatusDot } from "./ui.jsx";
-import Terminal from "./Terminal.jsx";
+
+// Open the SSH terminal for a device in a separate browser window.
+// A stable window name per device reuses/focuses an already-open terminal.
+function openTerminal(device) {
+  window.open(
+    `/terminal/${device.id}`,
+    `mik-term-${device.id}`,
+    "width=1024,height=680,menubar=no,toolbar=no,location=no,status=no"
+  );
+}
 
 const POLL_MS = 10000;
 
@@ -14,7 +23,6 @@ export default function Devices() {
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [terminalDevice, setTerminalDevice] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const selectedRef = useRef(null);
 
@@ -184,9 +192,9 @@ export default function Devices() {
                         className="btn small secondary"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setTerminalDevice(d);
+                          openTerminal(d);
                         }}
-                        title="Открыть SSH-терминал"
+                        title="Открыть SSH-терминал в отдельном окне"
                       >
                         SSH
                       </button>
@@ -305,12 +313,6 @@ export default function Devices() {
             setShowImport(false);
             await refreshDevices();
           }}
-        />
-      )}
-      {terminalDevice && (
-        <Terminal
-          device={terminalDevice}
-          onClose={() => setTerminalDevice(null)}
         />
       )}
     </>

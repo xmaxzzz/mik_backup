@@ -282,19 +282,34 @@ td.actions {
 .modal.wide {
   width: 720px;
 }
-.modal.term-modal {
-  width: min(1100px, 96vw);
-  max-width: 96vw;
-}
-.term-host {
-  height: min(70vh, 620px);
+/* --- full-window SSH terminal page (/terminal/{id}) --- */
+.term-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: #0b0f18;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 6px;
+}
+.term-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.term-page-head .brand {
+  font-size: 14px;
+  font-weight: 600;
+}
+.term-view {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 6px 8px;
   overflow: hidden;
 }
-.term-host .xterm {
+.term-view .xterm {
   height: 100%;
 }
 
