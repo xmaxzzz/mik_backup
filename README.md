@@ -64,16 +64,23 @@ internal Compose network. All traffic in must go through Caddy.
 
 Caddy is configured with `tls internal`: it mints its own local CA and issues
 itself a certificate for the server's IP — no public DNS or ACME challenge
-needed, which fits a LAN-only deployment. Browsers will show an untrusted-cert
-warning until you trust that CA. Either accept the warning (fine for LAN admin
-use), or install Caddy's root certificate on your client — it's inside the
-`caddy_data` volume:
+needed, which fits a LAN-only deployment.
 
-```bash
-ssh mik-backup 'docker compose exec caddy cat /data/caddy/pki/authorities/local/root.crt'
+**Install the root CA on every client that uses the app.** Clicking through the
+browser's untrusted-cert warning is *not* enough for the in-browser SSH terminal:
+browsers refuse `wss://` WebSocket connections to an untrusted cert even after
+you proceed past the page warning. Trusting the CA fixes both the warning and
+the terminal. Download it from the app itself:
+
+```
+https://<server-ip>/mik-ca.crt
 ```
 
-Save that as a `.crt` file and import it into your OS/browser trust store.
+Then import it into **Trusted Root Certification Authorities** (Windows:
+double-click → Install → Local Machine → that store; or
+`Import-Certificate -FilePath mik-ca.crt -CertStoreLocation Cert:\LocalMachine\Root`),
+and fully restart the browser. The root CA is valid for ~10 years; the leaf
+certs Caddy rotates under it are then trusted automatically.
 
 > **Why the Caddyfile has a `default_sni` global option.** Browsers (and
 > curl/most TLS clients) don't send the SNI extension when the URL host is a
