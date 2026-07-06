@@ -20,8 +20,9 @@ YANDEX_REFRESH_TOKEN = "yandex_refresh_token"   # secret
 YANDEX_TOKEN_EXPIRES_AT = "yandex_token_expires_at"  # unix ts (str)
 YANDEX_FOLDER = "yandex_folder"
 YANDEX_DISPLAY_NAME = "yandex_display_name"
-ROS_LATEST_STABLE = "ros_latest_stable"        # cached from mikrotik.com
+ROS_LATEST_STABLE = "ros_latest_stable"        # auto-fetched from mikrotik.com
 ROS_LATEST_CHECKED = "ros_latest_checked"      # unix ts of last fetch
+ROS_LATEST_MANUAL = "ros_latest_manual"        # admin override (takes priority)
 
 _SECRET_KEYS = {
     TELEGRAM_BOT_TOKEN,

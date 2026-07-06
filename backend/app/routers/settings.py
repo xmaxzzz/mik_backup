@@ -8,6 +8,7 @@ from .. import schemas
 from ..config import get_settings
 from ..database import get_db
 from ..deps import get_current_user
+from ..services import ros_versions
 from ..services import settings_store as store
 from ..services import telegram
 
@@ -29,6 +30,8 @@ def get_settings_view(db: Session = Depends(get_db)):
         yandex_client_secret_set=store.is_set(db, store.YANDEX_CLIENT_SECRET),
         yandex_folder=store.get(db, store.YANDEX_FOLDER),
         availability_interval_sec=app_settings.availability_interval_sec,
+        ros_latest_version=store.get(db, store.ROS_LATEST_MANUAL),
+        ros_latest_effective=ros_versions.get_latest_stable(db),
     )
 
 
@@ -41,6 +44,7 @@ def update_settings(payload: schemas.SettingsUpdate, db: Session = Depends(get_d
         "yandex_client_id": store.YANDEX_CLIENT_ID,
         "yandex_client_secret": store.YANDEX_CLIENT_SECRET,
         "yandex_folder": store.YANDEX_FOLDER,
+        "ros_latest_version": store.ROS_LATEST_MANUAL,
     }
     for field, key in mapping.items():
         if field in data:

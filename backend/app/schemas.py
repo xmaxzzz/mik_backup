@@ -135,6 +135,8 @@ class SettingsOut(BaseModel):
     yandex_client_secret_set: bool = False
     yandex_folder: str | None = None
     availability_interval_sec: int = 60
+    ros_latest_version: str | None = None       # admin override (blank = auto)
+    ros_latest_effective: str | None = None      # value actually used for badges
 
 
 class SettingsUpdate(BaseModel):
@@ -144,6 +146,7 @@ class SettingsUpdate(BaseModel):
     yandex_client_id: str | None = None
     yandex_client_secret: str | None = None
     yandex_folder: str | None = None
+    ros_latest_version: str | None = None
 
 
 # --- yandex ---

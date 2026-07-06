@@ -4,9 +4,80 @@ import { api, ApiError } from "./api.js";
 export default function Settings() {
   return (
     <>
+      <RosVersionCard />
       <YandexCard />
       <TelegramCard />
     </>
+  );
+}
+
+/* --------------------------------------------------------------------- */
+/* RouterOS latest-stable reference (for the version badges)             */
+/* --------------------------------------------------------------------- */
+function RosVersionCard() {
+  const [value, setValue] = useState("");
+  const [effective, setEffective] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      const s = await api.getSettings();
+      setValue(s.ros_latest_version || "");
+      setEffective(s.ros_latest_effective || null);
+    } catch (err) {
+      setError(err.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  async function save() {
+    setError("");
+    setMsg("");
+    setBusy(true);
+    try {
+      await api.updateSettings({ ros_latest_version: value.trim() });
+      setMsg("Сохранено.");
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h2>Версия RouterOS</h2>
+        <span className="muted small">
+          сейчас используется: <span className="mono">{effective || "—"}</span>
+        </span>
+      </div>
+      <p className="muted small">
+        Актуальная стабильная версия, с которой сравниваются роутеры (зелёный —
+        новее или равно, оранжевый — устарел). Файл MikroTik автоопределения
+        (NEWEST7.stable) часто устаревший, поэтому укажите версию вручную —
+        например <span className="mono">7.21.5</span>. Пусто — использовать
+        автоопределение.
+      </p>
+      <label>Актуальная stable-версия</label>
+      <input
+        className="mono"
+        placeholder="напр. 7.21.5 (пусто — авто)"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+      />
+      <button className="btn secondary" disabled={busy} onClick={save}>
+        Сохранить
+      </button>
+      {msg && <div className="notice">{msg}</div>}
+      {error && <div className="error">{error}</div>}
+    </section>
   );
 }
 

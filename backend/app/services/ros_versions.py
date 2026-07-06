@@ -19,12 +19,18 @@ _TIMEOUT = 6
 
 
 def get_latest_stable(db: Session) -> str | None:
-    """Return the cached latest stable version, refreshing at most every 6h.
+    """Return the reference "latest stable" RouterOS version.
 
+    An admin-set value (Settings) always wins — MikroTik's public
+    NEWEST7.stable file is stale, so auto-fetch is only a fallback default.
     On a failed fetch the last cached value (possibly None) is returned — the
     server's outbound network is occasionally flaky and this must never break
     the device list.
     """
+    manual = store.get(db, store.ROS_LATEST_MANUAL)
+    if manual:
+        return manual
+
     cached = store.get(db, store.ROS_LATEST_STABLE)
     checked = store.get(db, store.ROS_LATEST_CHECKED)
     fresh = False
