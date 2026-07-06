@@ -1,7 +1,14 @@
-"""Fetch and cache the current stable RouterOS version from mikrotik.com."""
+"""Determine the latest stable RouterOS version.
+
+Source: MikroTik's download-page changelog feed for the stable channel
+(https://mikrotik.com/download/changelogs?channelFilter=stable). The plain
+NEWEST7.stable file is stale, so we scrape the highest 7.x version listed here
+(the same data the download page shows). An admin override in Settings wins.
+"""
 from __future__ import annotations
 
 import logging
+import re
 import time
 
 import requests
@@ -11,22 +18,35 @@ from . import settings_store as store
 
 logger = logging.getLogger("mikbackup.ros")
 
-# RouterOS itself uses these files for "Check for updates"; the body is
-# "<version> <build-unix-time>", e.g. "7.16.1 1728316800".
-_URL = "https://upgrade.mikrotik.com/routeros/NEWEST7.stable"
+_URL = "https://mikrotik.com/download/changelogs?channelFilter=stable"
 _TTL_SECONDS = 6 * 3600
-_TIMEOUT = 6
+_TIMEOUT = 15
+# RouterOS 7 version: 7.<minor>[.<patch>], bounded so it doesn't match digit runs
+_VER_RE = re.compile(r"\b7\.\d{1,2}(?:\.\d{1,3})?\b")
+
+
+def _ver_key(v: str) -> tuple[int, int, int]:
+    parts = [int(x) for x in v.split(".")]
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts[:3])  # type: ignore[return-value]
+
+
+def _fetch() -> str | None:
+    resp = requests.get(
+        _URL, timeout=_TIMEOUT, headers={"User-Agent": "mik-backup/1.0"}
+    )
+    if resp.status_code != 200:
+        return None
+    versions = _VER_RE.findall(resp.text)
+    if not versions:
+        return None
+    return max(versions, key=_ver_key)
 
 
 def get_latest_stable(db: Session) -> str | None:
-    """Return the reference "latest stable" RouterOS version.
-
-    An admin-set value (Settings) always wins — MikroTik's public
-    NEWEST7.stable file is stale, so auto-fetch is only a fallback default.
-    On a failed fetch the last cached value (possibly None) is returned — the
-    server's outbound network is occasionally flaky and this must never break
-    the device list.
-    """
+    """Latest stable version. Admin override wins; else auto-detect (cached 6h);
+    on a failed fetch the last cached value (possibly None) is returned."""
     manual = store.get(db, store.ROS_LATEST_MANUAL)
     if manual:
         return manual
@@ -43,15 +63,13 @@ def get_latest_stable(db: Session) -> str | None:
         return cached
 
     try:
-        resp = requests.get(_URL, timeout=_TIMEOUT)
-        if resp.status_code == 200:
-            version = resp.text.strip().split()[0] if resp.text.strip() else ""
-            if version and version[0].isdigit():
-                store.set(db, store.ROS_LATEST_STABLE, version)
-                store.set(db, store.ROS_LATEST_CHECKED, str(int(time.time())))
-                db.commit()
-                logger.info("Latest stable RouterOS: %s", version)
-                return version
+        version = _fetch()
+        if version:
+            store.set(db, store.ROS_LATEST_STABLE, version)
+            store.set(db, store.ROS_LATEST_CHECKED, str(int(time.time())))
+            db.commit()
+            logger.info("Latest stable RouterOS: %s", version)
+            return version
     except Exception as exc:  # noqa: BLE001 - network flaky; keep last value
         logger.warning("Could not fetch latest RouterOS version: %s", exc)
     return cached
