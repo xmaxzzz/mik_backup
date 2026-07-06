@@ -34,3 +34,6 @@ frontend/node_modules/
 .DS_Store
 Thumbs.db
 *.log
+
+# local handoff (operational details — not for the public repo)
+HANDOFF.md
