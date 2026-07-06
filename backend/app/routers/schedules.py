@@ -94,6 +94,53 @@ def update_schedule(
     return _to_out(db, sched)
 
 
+@router.get("/{schedule_id}/devices", response_model=list[int])
+def get_schedule_devices(schedule_id: int, db: Session = Depends(get_db)):
+    """IDs of devices currently attached to this schedule."""
+    _get_or_404(db, schedule_id)
+    rows = (
+        db.query(models.Device.id)
+        .filter(models.Device.schedule_id == schedule_id)
+        .all()
+    )
+    return [r[0] for r in rows]
+
+
+@router.post("/{schedule_id}/devices", response_model=schemas.ScheduleOut)
+def set_schedule_devices(
+    schedule_id: int,
+    payload: schemas.ScheduleDevicesRequest,
+    db: Session = Depends(get_db),
+):
+    """Set this schedule's device membership in bulk.
+
+    Devices in ``device_ids`` are attached to this schedule; devices previously
+    on this schedule but not listed are detached (schedule_id=NULL). Devices on
+    *other* schedules are left untouched. Backup jobs read membership at run
+    time, so no rescheduling is needed.
+    """
+    sched = _get_or_404(db, schedule_id)
+    ids = list(dict.fromkeys(payload.device_ids))  # de-dup, keep order
+
+    # detach devices currently on this schedule that aren't in the new set
+    detach_q = db.query(models.Device).filter(
+        models.Device.schedule_id == schedule_id
+    )
+    if ids:
+        detach_q = detach_q.filter(models.Device.id.notin_(ids))
+    detach_q.update({models.Device.schedule_id: None}, synchronize_session=False)
+
+    # attach the selected devices to this schedule
+    if ids:
+        db.query(models.Device).filter(models.Device.id.in_(ids)).update(
+            {models.Device.schedule_id: schedule_id}, synchronize_session=False
+        )
+
+    db.commit()
+    db.refresh(sched)
+    return _to_out(db, sched)
+
+
 @router.delete("/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_schedule(schedule_id: int, db: Session = Depends(get_db)):
     sched = _get_or_404(db, schedule_id)

@@ -57,6 +57,10 @@ class ScheduleOut(BaseModel):
     device_count: int = 0
 
 
+class ScheduleDevicesRequest(BaseModel):
+    device_ids: list[int] = []
+
+
 # --- devices ---
 class DeviceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128)

@@ -103,6 +103,12 @@ export const api = {
   updateSchedule: (id, patch) =>
     request(`/schedules/${id}`, { method: "PATCH", body: patch }),
   deleteSchedule: (id) => request(`/schedules/${id}`, { method: "DELETE" }),
+  getScheduleDevices: (id) => request(`/schedules/${id}/devices`),
+  setScheduleDevices: (id, deviceIds) =>
+    request(`/schedules/${id}/devices`, {
+      method: "POST",
+      body: { device_ids: deviceIds },
+    }),
 
   // settings
   getSettings: () => request("/settings"),

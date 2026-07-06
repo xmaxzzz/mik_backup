@@ -13,6 +13,7 @@ export default function Schedules() {
   const [items, setItems] = useState([]);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(null); // schedule object or {} for new
+  const [managing, setManaging] = useState(null); // schedule whose devices we edit
 
   const refresh = useCallback(async () => {
     try {
@@ -91,6 +92,9 @@ export default function Schedules() {
                   </label>
                 </td>
                 <td className="actions">
+                  <button className="btn small" onClick={() => setManaging(s)}>
+                    Устройства
+                  </button>
                   <button className="btn small secondary" onClick={() => setEditing(s)}>
                     Изменить
                   </button>
@@ -114,7 +118,142 @@ export default function Schedules() {
           }}
         />
       )}
+      {managing && (
+        <ScheduleDevices
+          schedule={managing}
+          onClose={() => setManaging(null)}
+          onSaved={async () => {
+            setManaging(null);
+            await refresh();
+          }}
+        />
+      )}
     </section>
+  );
+}
+
+// Bulk-manage which devices use a schedule: checked = attached to it.
+function ScheduleDevices({ schedule, onClose, onSaved }) {
+  const [devices, setDevices] = useState(null);
+  const [checked, setChecked] = useState({}); // id -> bool
+  const [filter, setFilter] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [all, mine] = await Promise.all([
+          api.listDevices(),
+          api.getScheduleDevices(schedule.id),
+        ]);
+        setDevices(all);
+        const init = {};
+        const mineSet = new Set(mine);
+        all.forEach((d) => (init[d.id] = mineSet.has(d.id)));
+        setChecked(init);
+      } catch (err) {
+        setError(err.message);
+      }
+    })();
+  }, [schedule.id]);
+
+  const q = filter.trim().toLowerCase();
+  const shown = (devices || []).filter(
+    (d) =>
+      !q ||
+      [d.name, d.host, d.comment].some((v) => v && v.toLowerCase().includes(q))
+  );
+  const selectedCount = Object.values(checked).filter(Boolean).length;
+
+  function setAllShown(value) {
+    setChecked((c) => {
+      const next = { ...c };
+      shown.forEach((d) => (next[d.id] = value));
+      return next;
+    });
+  }
+
+  async function save() {
+    setError("");
+    setBusy(true);
+    try {
+      const ids = Object.keys(checked)
+        .filter((id) => checked[id])
+        .map(Number);
+      await api.setScheduleDevices(schedule.id, ids);
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Ошибка сохранения");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title={`Устройства расписания «${schedule.name}»`} onClose={onClose} wide>
+      <p className="muted small">
+        Отмеченные роутеры будут привязаны к этому расписанию; снятые —
+        отвязаны (станут «Без расписания»). Устройства на других расписаниях не
+        затрагиваются, пока вы их не отметите здесь.
+      </p>
+      <div className="filter-row">
+        <input
+          className="filter-input"
+          placeholder="Поиск по имени или IP…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
+        <span className="muted small">выбрано {selectedCount}</span>
+        <button type="button" className="link" onClick={() => setAllShown(true)}>
+          отметить все{q ? " (по фильтру)" : ""}
+        </button>
+        <button type="button" className="link" onClick={() => setAllShown(false)}>
+          снять
+        </button>
+      </div>
+      {error && <div className="error">{error}</div>}
+      {devices === null ? (
+        <p className="muted small">Загрузка…</p>
+      ) : (
+        <div className="table-scroll" style={{ maxHeight: 340 }}>
+          <table>
+            <tbody>
+              {shown.map((d) => (
+                <tr key={d.id}>
+                  <td style={{ width: 28 }}>
+                    <input
+                      type="checkbox"
+                      checked={!!checked[d.id]}
+                      onChange={(e) =>
+                        setChecked((c) => ({ ...c, [d.id]: e.target.checked }))
+                      }
+                    />
+                  </td>
+                  <td>
+                    {d.name}
+                    {d.schedule_name && d.schedule_id !== schedule.id && (
+                      <span className="muted small"> · сейчас: {d.schedule_name}</span>
+                    )}
+                  </td>
+                  <td className="mono">{d.host}:{d.port}</td>
+                </tr>
+              ))}
+              {shown.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="muted">
+                    Ничего не найдено.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <button className="btn" disabled={busy || devices === null} onClick={save}>
+        {busy ? "Сохранение…" : "Сохранить"}
+      </button>
+    </Modal>
   );
 }
 
