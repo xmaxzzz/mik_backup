@@ -12,6 +12,7 @@ backend/app/data/
 venv/
 frontend/node_modules/
 frontend/dist/
+backend/app/static/
 .vscode/
 .idea/
 .claude/

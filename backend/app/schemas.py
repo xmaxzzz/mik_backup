@@ -232,3 +232,38 @@ class ImportConfirmRequest(BaseModel):
 class ImportResult(BaseModel):
     created: int
     devices: list[DeviceOut]
+
+
+# --- config transfer (encrypted export / import of the whole base) ---
+class ExportRequest(BaseModel):
+    passphrase: str = Field(min_length=8)
+    include_settings: bool = True
+    include_ssh_keys: bool = True
+    include_backups: bool = False
+
+
+class TransferDeviceBrief(BaseModel):
+    name: str
+    host: str
+
+
+class TransferPreview(BaseModel):
+    exported_at: str | None = None
+    device_count: int = 0
+    schedule_count: int = 0
+    has_settings: bool = False
+    settings_keys: list[str] = []
+    has_ssh_keys: bool = False
+    backup_count: int = 0
+    devices: list[TransferDeviceBrief] = []
+
+
+class TransferImportResult(BaseModel):
+    mode: str
+    schedules_created: int = 0
+    schedules_updated: int = 0
+    devices_created: int = 0
+    devices_updated: int = 0
+    backups_imported: int = 0
+    settings_applied: bool = False
+    ssh_keys_applied: bool = False

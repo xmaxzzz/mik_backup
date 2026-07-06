@@ -57,14 +57,23 @@ async function request(path, { method = "GET", body, auth = true } = {}) {
 }
 
 async function upload(path, file) {
+  return uploadForm(path, { file });
+}
+
+// Multipart POST with arbitrary fields (a File/Blob is appended as-is,
+// everything else is stringified — booleans become "true"/"false").
+async function uploadForm(path, fields) {
   const form = new FormData();
-  form.append("file", file);
+  for (const [key, value] of Object.entries(fields)) {
+    if (value === undefined || value === null) continue;
+    form.append(key, value instanceof Blob ? value : String(value));
+  }
   const headers = {};
   const token = getToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(`/api${path}`, { method: "POST", headers, body: form });
   await handleErrors(res, true);
-  return res.json();
+  return res.status === 204 ? null : res.json();
 }
 
 export const api = {
@@ -115,6 +124,12 @@ export const api = {
   updateSettings: (patch) => request("/settings", { method: "PUT", body: patch }),
   testTelegram: () => request("/settings/test-telegram", { method: "POST" }),
 
+  // config transfer (encrypted export / import of the whole base)
+  transferPreview: (file, passphrase) =>
+    uploadForm("/transfer/import/preview", { file, passphrase }),
+  transferImport: (file, passphrase, opts) =>
+    uploadForm("/transfer/import/confirm", { file, passphrase, ...opts }),
+
   // ssh key
   getSshKey: () => request("/ssh-key"),
 
@@ -134,19 +149,48 @@ export const api = {
     request("/yandex/folders", { method: "POST", body: { path } }),
 };
 
+function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // Download needs the auth header, so fetch as a blob and save it.
 export async function downloadBackup(backup) {
   const res = await fetch(`/api/backups/${backup.id}/download`, {
     headers: { Authorization: `Bearer ${getToken()}` },
   });
   if (!res.ok) throw new ApiError("Download failed", res.status);
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = backup.filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  saveBlob(await res.blob(), backup.filename);
+}
+
+// Encrypted config export: POST returns a .mbk file to download.
+export async function downloadExport(passphrase, opts = {}) {
+  const res = await fetch(`/api/transfer/export`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getToken()}`,
+    },
+    body: JSON.stringify({ passphrase, ...opts }),
+  });
+  if (!res.ok) {
+    let detail = `Export failed (${res.status})`;
+    try {
+      const data = await res.json();
+      if (data && data.detail)
+        detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+    } catch (_) {
+      /* non-JSON */
+    }
+    throw new ApiError(detail, res.status);
+  }
+  const cd = res.headers.get("content-disposition") || "";
+  const match = cd.match(/filename="?([^"]+)"?/);
+  saveBlob(await res.blob(), match ? match[1] : "mikbackup.mbk");
 }

@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { api, ApiError } from "./api.js";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { api, ApiError, downloadExport } from "./api.js";
 
 export default function Settings() {
   return (
@@ -7,6 +7,7 @@ export default function Settings() {
       <RosVersionCard />
       <YandexCard />
       <TelegramCard />
+      <TransferCard />
     </>
   );
 }
@@ -459,5 +460,308 @@ function TelegramCard() {
       {msg && <div className="notice">{msg}</div>}
       {error && <div className="error">{error}</div>}
     </section>
+  );
+}
+
+/* --------------------------------------------------------------------- */
+/* Export / Import of the whole configuration (encrypted .mbk bundle)    */
+/* --------------------------------------------------------------------- */
+function TransferCard() {
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h2>Экспорт / Импорт конфигурации</h2>
+      </div>
+      <p className="muted small">
+        Переносимый зашифрованный файл <span className="mono">.mbk</span> со всей базой:
+        устройства, расписания, настройки и токены, SSH-ключ приложения и (по желанию)
+        история бэкапов. Секреты шифруются под заданный пароль и при импорте
+        перешифровываются ключом целевой машины — файл переносится на любую инсталляцию.
+      </p>
+      <ExportBlock />
+      <hr className="sep" />
+      <ImportBlock />
+    </section>
+  );
+}
+
+function ExportBlock() {
+  const [passphrase, setPassphrase] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [opts, setOpts] = useState({
+    include_settings: true,
+    include_ssh_keys: true,
+    include_backups: false,
+  });
+  const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const toggle = (key) => setOpts((o) => ({ ...o, [key]: !o[key] }));
+
+  async function run() {
+    setError("");
+    setMsg("");
+    if (passphrase.length < 8) return setError("Пароль должен быть не короче 8 символов.");
+    if (passphrase !== confirm) return setError("Пароли не совпадают.");
+    setBusy(true);
+    try {
+      await downloadExport(passphrase, opts);
+      setMsg("Файл экспорта сформирован и скачан.");
+      setPassphrase("");
+      setConfirm("");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не удалось сформировать экспорт");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <h3>Экспорт</h3>
+      <label>Пароль для файла</label>
+      <input
+        type="password"
+        value={passphrase}
+        placeholder="не короче 8 символов"
+        onChange={(e) => setPassphrase(e.target.value)}
+      />
+      <label>Повторите пароль</label>
+      <input
+        type="password"
+        value={confirm}
+        onChange={(e) => setConfirm(e.target.value)}
+      />
+      <div className="checks" style={{ margin: "10px 0" }}>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={opts.include_settings}
+            onChange={() => toggle("include_settings")}
+          />{" "}
+          Настройки и токены (Telegram / Яндекс)
+        </label>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={opts.include_ssh_keys}
+            onChange={() => toggle("include_ssh_keys")}
+          />{" "}
+          SSH-ключ приложения
+        </label>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={opts.include_backups}
+            onChange={() => toggle("include_backups")}
+          />{" "}
+          История бэкапов (.rsc) — файл будет крупнее
+        </label>
+      </div>
+      <button className="btn" disabled={busy} onClick={run}>
+        {busy ? "Формирование…" : "Скачать бэкап (.mbk)"}
+      </button>
+      {msg && <div className="notice">{msg}</div>}
+      {error && <div className="error">{error}</div>}
+    </div>
+  );
+}
+
+function ImportBlock() {
+  const fileRef = useRef(null);
+  const [passphrase, setPassphrase] = useState("");
+  const [preview, setPreview] = useState(null);
+  const [mode, setMode] = useState("merge");
+  const [opts, setOpts] = useState({
+    include_settings: true,
+    include_ssh_keys: true,
+    include_backups: true,
+  });
+  const [result, setResult] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const toggle = (key) => setOpts((o) => ({ ...o, [key]: !o[key] }));
+
+  function selectedFile() {
+    return fileRef.current?.files?.[0] || null;
+  }
+
+  function reset() {
+    setPreview(null);
+    setResult(null);
+  }
+
+  async function doPreview() {
+    setError("");
+    setMsg("");
+    setResult(null);
+    const file = selectedFile();
+    if (!file) return setError("Выберите файл .mbk.");
+    if (!passphrase) return setError("Введите пароль от файла.");
+    setBusy(true);
+    try {
+      const p = await api.transferPreview(file, passphrase);
+      setPreview(p);
+      setOpts({
+        include_settings: p.has_settings,
+        include_ssh_keys: p.has_ssh_keys,
+        include_backups: p.backup_count > 0,
+      });
+    } catch (err) {
+      setPreview(null);
+      setError(err instanceof ApiError ? err.message : "Не удалось прочитать файл");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function doImport() {
+    setError("");
+    setMsg("");
+    const file = selectedFile();
+    if (!file) return setError("Файл не выбран.");
+    if (
+      mode === "replace" &&
+      !window.confirm(
+        "Режим «заменить» удалит текущие устройства, расписания" +
+          (opts.include_settings ? " и настройки" : "") +
+          " перед импортом. Продолжить?"
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      const r = await api.transferImport(file, passphrase, { mode, ...opts });
+      setResult(r);
+      setMsg("Импорт завершён.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не удалось выполнить импорт");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <h3>Импорт</h3>
+      <label>Файл .mbk</label>
+      <input type="file" accept=".mbk" ref={fileRef} onChange={reset} />
+      <label>Пароль от файла</label>
+      <input
+        type="password"
+        value={passphrase}
+        onChange={(e) => {
+          setPassphrase(e.target.value);
+          reset();
+        }}
+      />
+      <button className="btn secondary" disabled={busy} onClick={doPreview}>
+        {busy && !preview ? "Проверка…" : "Проверить файл"}
+      </button>
+
+      {preview && (
+        <div className="notice" style={{ marginTop: 12 }}>
+          <div className="muted small">
+            Экспорт от:{" "}
+            <span className="mono">{preview.exported_at || "неизвестно"}</span>
+          </div>
+          <div>
+            Устройств: <b>{preview.device_count}</b> · расписаний:{" "}
+            <b>{preview.schedule_count}</b>
+            {preview.backup_count > 0 && (
+              <>
+                {" "}
+                · бэкапов: <b>{preview.backup_count}</b>
+              </>
+            )}
+          </div>
+          <div className="small muted" style={{ marginTop: 4 }}>
+            {preview.has_settings
+              ? `настройки: ${preview.settings_keys.length} ключ(ей)`
+              : "настроек нет"}{" "}
+            · {preview.has_ssh_keys ? "SSH-ключ есть" : "SSH-ключа нет"}
+          </div>
+
+          <div className="checks" style={{ margin: "12px 0" }}>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                disabled={!preview.has_settings}
+                checked={opts.include_settings}
+                onChange={() => toggle("include_settings")}
+              />{" "}
+              Импортировать настройки и токены
+            </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                disabled={!preview.has_ssh_keys}
+                checked={opts.include_ssh_keys}
+                onChange={() => toggle("include_ssh_keys")}
+              />{" "}
+              Восстановить SSH-ключ (перезапишет ключ на этом сервере)
+            </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                disabled={preview.backup_count === 0}
+                checked={opts.include_backups}
+                onChange={() => toggle("include_backups")}
+              />{" "}
+              Импортировать историю бэкапов
+            </label>
+          </div>
+
+          <label>Режим</label>
+          <div className="row">
+            <label className="checkbox">
+              <input
+                type="radio"
+                name="importmode"
+                checked={mode === "merge"}
+                onChange={() => setMode("merge")}
+              />{" "}
+              Объединить (обновить по host+логину, добавить новые)
+            </label>
+          </div>
+          <div className="row">
+            <label className="checkbox">
+              <input
+                type="radio"
+                name="importmode"
+                checked={mode === "replace"}
+                onChange={() => setMode("replace")}
+              />{" "}
+              Заменить (очистить текущие данные, затем импортировать)
+            </label>
+          </div>
+
+          <button
+            className={`btn ${mode === "replace" ? "danger" : ""}`}
+            disabled={busy}
+            onClick={doImport}
+            style={{ marginTop: 10 }}
+          >
+            {busy ? "Импорт…" : "Импортировать"}
+          </button>
+        </div>
+      )}
+
+      {result && (
+        <div className="notice" style={{ marginTop: 12 }}>
+          Устройства: +{result.devices_created} новых, {result.devices_updated} обновлено ·
+          расписания: +{result.schedules_created}, {result.schedules_updated} обновлено
+          {result.backups_imported > 0 && <> · бэкапов: +{result.backups_imported}</>}
+          <br />
+          настройки: {result.settings_applied ? "импортированы" : "пропущены"} · SSH-ключ:{" "}
+          {result.ssh_keys_applied ? "восстановлен" : "пропущен"}
+        </div>
+      )}
+      {msg && !result && <div className="notice">{msg}</div>}
+      {error && <div className="error">{error}</div>}
+    </div>
   );
 }

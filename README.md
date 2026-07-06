@@ -33,23 +33,72 @@ Telegram.
 
 ## Quick start (Docker)
 
+One command — generates `.env` with fresh secrets, sets the server address, and
+brings the stack up:
+
 ```bash
 git clone https://github.com/xmaxzzz/mik_backup.git
 cd mik_backup
+./bootstrap.sh <this-server-ip>      # IP omitted → auto-detected
+```
 
-# 1. create your environment file
-cp .env.example .env
+It prints the URL, the generated admin password, and the root-CA link. By default
+it **pulls** the published multi-arch image ([`xmaxzzz/mik-backup`](https://hub.docker.com/r/xmaxzzz/mik-backup))
+— no Node/pip build on the target. Re-running `./bootstrap.sh` is safe: it keeps
+the existing `.env` (and your `ENCRYPTION_KEY`). To move the service to a new
+address later: `./bootstrap.sh <new-ip>`. To build from source instead of pulling:
+`./bootstrap.sh <ip> --build`.
 
-# 2. generate the three secrets and put them in .env
-python3 -c "import secrets; print('SECRET_KEY='+secrets.token_urlsafe(48))"
-python3 -c "from cryptography.fernet import Fernet; print('ENCRYPTION_KEY='+Fernet.generate_key().decode())"
-python3 -c "import secrets; print('ADMIN_PASSWORD='+secrets.token_urlsafe(12))"
-#    also set SERVER_IP=<this server's LAN/VPN IP> so the SSH-key helper script is ready to paste
+<details>
+<summary>Manual setup (equivalent, without the script)</summary>
 
-# 3. edit the Caddyfile if your server's IP differs from 192.168.200.121
+No secrets to generate and no Caddyfile to edit — just start it:
 
-# 4. build & run
-docker compose up -d --build
+```bash
+docker compose up -d       # pulls the image; add --build to build from source
+```
+
+On first start the app **auto-generates** `SECRET_KEY`, `ENCRYPTION_KEY` and the
+initial `ADMIN_PASSWORD`, persists them in `data/instance.env`, and prints the
+admin password to the logs:
+
+```bash
+docker compose logs app | grep "admin login"
+```
+
+The only thing worth setting is the server address (for TLS on a bare-IP box):
+put `SERVER_IP=<your-ip>` in `.env` before starting. It defaults to
+`192.168.200.121`; changing it later means editing `.env` and running
+`docker compose up -d --force-recreate caddy`. **No Caddyfile edit needed.**
+
+Prefer to manage secrets yourself? Set any of them in `.env` (see
+[`.env.example`](.env.example)) — an explicit value always overrides the
+auto-generated one.
+</details>
+
+### Container image & releases
+
+The app ships as a multi-arch image (`linux/amd64` + `linux/arm64`) on Docker Hub:
+[`xmaxzzz/mik-backup`](https://hub.docker.com/r/xmaxzzz/mik-backup). Deployments
+`docker compose pull` it — no build step, no npm/PyPI access needed on the server.
+
+A GitHub Actions workflow ([`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml))
+builds and pushes automatically: **push to `main` → `:latest`**, **git tag
+`vX.Y.Z` → `:X.Y.Z` + `:X.Y` + `:latest`**. It needs two repo secrets
+(*Settings → Secrets and variables → Actions*):
+
+| Secret | Value |
+| --- | --- |
+| `DOCKERHUB_USERNAME` | `xmaxzzz` |
+| `DOCKERHUB_TOKEN` | a Docker Hub access token (Read/Write) |
+
+Pin a specific version on a server with `MIK_IMAGE` in `.env`
+(e.g. `MIK_IMAGE=xmaxzzz/mik-backup:1.2.0`); it defaults to `:latest`. To publish
+manually instead of via CI:
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t xmaxzzz/mik-backup:latest --push .
 ```
 
 Then open **<https://SERVER_IP>** (Caddy, port 443 — not `:8000`), sign in as
@@ -85,11 +134,12 @@ certs Caddy rotates under it are then trusted automatically.
 > **Why the Caddyfile has a `default_sni` global option.** Browsers (and
 > curl/most TLS clients) don't send the SNI extension when the URL host is a
 > bare IP address (RFC 6066) — SNI exists to disambiguate hostnames, and an IP
-> literal doesn't need it. Without `default_sni 192.168.200.121`, Caddy has no
-> certificate to offer on those SNI-less connections and the TLS handshake
-> fails outright. `default_sni` tells Caddy which certificate to fall back to
-> in that case. If you change the server's IP, update it in both the site
-> blocks and this global option.
+> literal doesn't need it. Without a `default_sni`, Caddy has no certificate to
+> offer on those SNI-less connections and the TLS handshake fails outright.
+> `default_sni` tells Caddy which certificate to fall back to in that case. The
+> Caddyfile reads the address from the `SERVER_IP` env var (`{$SERVER_IP:…}`),
+> so changing the server's IP is just editing `.env` + recreating Caddy — no
+> Caddyfile edits.
 
 Health check:
 
@@ -100,27 +150,54 @@ curl -sk https://SERVER_IP/api/health
 
 ---
 
+## Moving to another server / backup & restore
+
+**Settings → «Экспорт / Импорт конфигурации»** produces one encrypted `.mbk`
+file with the whole base: devices, schedules, settings + tokens (Telegram /
+Yandex), the application SSH keypair, and optionally the backup history with the
+`.rsc` files. Secrets are decrypted and re-encrypted under a passphrase you
+choose, so the file is portable to any installation — the target machine keeps
+its own `ENCRYPTION_KEY` and secrets are re-encrypted with it on import.
+
+To migrate:
+
+1. On the old server: export a `.mbk` (include the SSH key so the new server can
+   reach existing routers without re-provisioning them).
+2. On the new machine: `./bootstrap.sh <new-ip>`, log in as admin.
+3. **Settings → Импорт**, upload the `.mbk`, enter the passphrase → preview →
+   import (**merge** to add/update, **replace** to wipe first). Schedules are
+   rebuilt automatically; no restart needed.
+
+The file is useless without the passphrase — but it does contain your device
+credentials and tokens, so store it somewhere safe.
+
+---
+
 ## Configuration
 
-All configuration is via environment variables (see [`.env.example`](.env.example)).
+All configuration is via environment variables (see [`.env.example`](.env.example)),
+but **`.env` is optional** — every secret is auto-generated on first run if unset.
 Backup timing, Telegram and Yandex.Disk are configured **in the UI**, not via env.
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `SECRET_KEY` | ✅ | — | JWT signing key |
-| `ENCRYPTION_KEY` | ✅ | — | Fernet key for encrypting device credentials + tokens |
-| `ADMIN_PASSWORD` | ✅ | — | Initial admin password (first run only) |
+| `SECRET_KEY` | | *auto* | JWT signing key — auto-generated & persisted in `data/instance.env` if unset |
+| `ENCRYPTION_KEY` | | *auto* | Fernet key for device credentials + tokens — auto-generated if unset |
+| `ADMIN_PASSWORD` | | *auto* | Initial admin password (first run only) — auto-generated & logged if unset |
 | `ADMIN_USER` | | `admin` | Initial admin username |
-| `SERVER_IP` | | `""` | This server's LAN/VPN IP, used in the ready-to-paste RouterOS SSH-key script |
+| `SERVER_IP` | | `192.168.200.121` | This server's LAN/VPN IP — the address Caddy serves TLS for (reachable at `https://SERVER_IP`) |
+| `MIK_IMAGE` | | `xmaxzzz/mik-backup:latest` | Image ref used by compose; pin a version here |
 | `DEFAULT_SSH_PORT` | | `10322` | Default SSH port for new / imported devices |
 | `BACKUP_RETENTION` | | `30` | Backups kept per device (0 = unlimited) |
 | `AVAILABILITY_INTERVAL_SEC` | | `60` | How often every device is TCP-probed for the online/offline dot |
 | `SCHEDULER_ENABLED` | | `true` | Toggle all background jobs (backups + availability) |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | | `720` | JWT lifetime |
 
-> **Never commit `.env`.** It contains secrets and is git-ignored. Generate
-> secrets on the host you deploy to. The application SSH private key lives in
-> `data/ssh/` (also git-ignored) and never leaves the server.
+> **Auto-generated secrets live in `data/instance.env`** (git-ignored, chmod 600)
+> — that file holds the key that decrypts stored credentials, so back it up
+> (or use **Export конфигурации**). Setting a value in `.env` always overrides
+> the auto-generated one. Never commit `.env`. The application SSH private key
+> lives in `data/ssh/` (also git-ignored) and never leaves the server.
 
 Backups, the SQLite database and the SSH key live in the `./data` volume and
 persist across rebuilds.

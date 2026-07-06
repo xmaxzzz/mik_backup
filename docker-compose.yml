@@ -1,11 +1,16 @@
 services:
   app:
+    # Pull the published multi-arch image by default; override the tag with
+    # MIK_IMAGE in .env to pin a version. `build: .` is kept so `docker compose
+    # build` / `up --build` still works for local development.
+    image: ${MIK_IMAGE:-xmaxzzz/mik-backup:latest}
     build: .
-    image: mik-backup:latest
     container_name: mik-backup
     restart: unless-stopped
     env_file:
-      - .env
+      # Optional: secrets are auto-generated into data/instance.env if no .env.
+      - path: .env
+        required: false
     environment:
       DATA_DIR: /data
     expose:
@@ -18,6 +23,10 @@ services:
     image: caddy:2
     container_name: mik-backup-caddy
     restart: unless-stopped
+    environment:
+      # The address Caddy serves TLS for. Set SERVER_IP in .env; a changed
+      # value needs `docker compose up -d --force-recreate caddy` to apply.
+      SERVER_IP: ${SERVER_IP:-192.168.200.121}
     ports:
       - "80:80"
       - "443:443"

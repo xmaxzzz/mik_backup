@@ -1,0 +1,5 @@
+# Shell scripts must keep LF endings so they run on the Linux deploy host
+# (CRLF breaks the shebang / `\r` command errors), regardless of the committer's
+# core.autocrlf setting.
+*.sh text eol=lf
+bootstrap.sh text eol=lf

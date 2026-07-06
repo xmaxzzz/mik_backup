@@ -71,3 +71,35 @@ def delete(db: Session, key: str) -> None:
     row = db.get(models.Setting, key)
     if row is not None:
         db.delete(row)
+
+
+def dump(db: Session) -> dict[str, str]:
+    """All persisted settings as plaintext (secret values decrypted).
+
+    Used by the config export. Secrets that can't be decrypted (rotated key)
+    are skipped rather than exported as ciphertext, which would be useless on
+    a machine with a different key.
+    """
+    out: dict[str, str] = {}
+    for row in db.query(models.Setting).all():
+        if not row.value:
+            continue
+        if row.key in _SECRET_KEYS:
+            try:
+                out[row.key] = decrypt_secret(row.value)
+            except Exception:  # noqa: BLE001 - corrupt/rotated key
+                logger.warning("Skipping unreadable secret %s during export", row.key)
+                continue
+        else:
+            out[row.key] = row.value
+    return out
+
+
+def load(db: Session, data: dict[str, str]) -> int:
+    """Restore settings from a plaintext mapping, re-encrypting secrets with
+    this machine's key. Returns the number of keys written."""
+    count = 0
+    for key, value in data.items():
+        set(db, key, value)
+        count += 1
+    return count

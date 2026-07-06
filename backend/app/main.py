@@ -23,6 +23,7 @@ from .routers import (
     settings as settings_router,
     ssh,
     terminal,
+    transfer,
     yandex,
 )
 from .security import hash_password
@@ -83,6 +84,7 @@ app.include_router(yandex.router, prefix=api_prefix)
 app.include_router(ssh.router, prefix=api_prefix)
 app.include_router(terminal.router, prefix=api_prefix)
 app.include_router(ros.router, prefix=api_prefix)
+app.include_router(transfer.router, prefix=api_prefix)
 
 
 # --- Static SPA ---

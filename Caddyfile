@@ -2,10 +2,14 @@
     # Browsers/clients don't send SNI when the URL host is a bare IP literal
     # (RFC 6066) — this tells Caddy which certificate to serve for those
     # SNI-less connections, which is otherwise all of them on this LAN box.
-    default_sni 192.168.200.121
+    #
+    # The address is taken from the SERVER_IP env var (passed in by
+    # docker-compose from .env), so a new deployment only sets it once —
+    # no Caddyfile edits. Falls back to the original LAN IP if unset.
+    default_sni {$SERVER_IP:192.168.200.121}
 }
 
-https://192.168.200.121 {
+https://{$SERVER_IP:192.168.200.121} {
     tls internal
     encode zstd gzip
 
@@ -26,6 +30,6 @@ https://192.168.200.121 {
     }
 }
 
-http://192.168.200.121 {
+http://{$SERVER_IP:192.168.200.121} {
     redir https://{host}{uri} permanent
 }

@@ -1,5 +1,7 @@
 # ---------- stage 1: build the React SPA ----------
-FROM node:20-alpine AS frontend
+# Pin to the BUILD host's arch: the SPA output is just static files (arch-agnostic),
+# so we never emulate Node under QEMU when cross-building the arm64 image.
+FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
