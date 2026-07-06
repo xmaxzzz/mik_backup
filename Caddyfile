@@ -8,7 +8,22 @@
 https://192.168.200.121 {
     tls internal
     encode zstd gzip
-    reverse_proxy app:8000
+
+    # Download Caddy's internal root CA so it can be trusted on clients.
+    # Needed for the in-browser SSH terminal: browsers block wss:// to an
+    # untrusted cert. Install this once (Trusted Root Certification Authorities)
+    # and both HTTPS and the terminal work without warnings.
+    @ca path /mik-ca.crt
+    handle @ca {
+        root * /data/caddy/pki/authorities/local
+        rewrite * /root.crt
+        header Content-Disposition "attachment; filename=mik-ca.crt"
+        file_server
+    }
+
+    handle {
+        reverse_proxy app:8000
+    }
 }
 
 http://192.168.200.121 {

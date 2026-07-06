@@ -86,9 +86,25 @@ export function TerminalView({ device, credentials = null, generation = 0, onCon
         term.write(new Uint8Array(ev.data));
       }
     };
-    ws.onclose = () =>
-      term.write("\r\n\x1b[33m*** Соединение закрыто ***\x1b[0m\r\n");
-    ws.onerror = () => term.write("\r\n\x1b[31m*** Ошибка WebSocket ***\x1b[0m\r\n");
+    let errored = false;
+    ws.onclose = () => {
+      if (errored) {
+        const caUrl = `${window.location.protocol}//${window.location.host}/mik-ca.crt`;
+        term.write(
+          "\r\n\x1b[33m*** Похоже, браузер блокирует WebSocket из-за " +
+            "самоподписанного сертификата.\r\n" +
+            `    Установите корневой сертификат: ${caUrl}\r\n` +
+            "    (открыть, сохранить, добавить в «Доверенные корневые центры " +
+            "сертификации»), затем обновите страницу.\x1b[0m\r\n"
+        );
+      } else {
+        term.write("\r\n\x1b[33m*** Соединение закрыто ***\x1b[0m\r\n");
+      }
+    };
+    ws.onerror = () => {
+      errored = true;
+      term.write("\r\n\x1b[31m*** Ошибка WebSocket ***\x1b[0m\r\n");
+    };
 
     const onResize = () => {
       try {
