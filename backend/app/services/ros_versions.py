@@ -21,8 +21,9 @@ logger = logging.getLogger("mikbackup.ros")
 _URL = "https://mikrotik.com/download/changelogs?channelFilter=stable"
 _TTL_SECONDS = 6 * 3600
 _TIMEOUT = 15
-# RouterOS 7 version: 7.<minor>[.<patch>], bounded so it doesn't match digit runs
-_VER_RE = re.compile(r"\b7\.\d{1,2}(?:\.\d{1,3})?\b")
+# Anchor to the changelog entry markers (wire:key="routeros-7.23.2",
+# toggleChangelog('7.23.2')) so we only match real releases, not stray numbers.
+_VER_RE = re.compile(r"routeros-(7\.\d{1,2}(?:\.\d{1,3})?)\b")
 
 
 def _ver_key(v: str) -> tuple[int, int, int]:
