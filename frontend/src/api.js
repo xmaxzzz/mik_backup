@@ -112,6 +112,9 @@ export const api = {
   // ssh key
   getSshKey: () => request("/ssh-key"),
 
+  // latest stable RouterOS version (mikrotik.com)
+  rosLatest: () => request("/ros/latest"),
+
   // yandex
   yandexStatus: () => request("/yandex/status"),
   yandexAuthUrl: () => request("/yandex/auth-url"),

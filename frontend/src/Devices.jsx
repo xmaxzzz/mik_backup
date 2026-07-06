@@ -37,6 +37,36 @@ async function copyText(text) {
 
 const POLL_MS = 10000;
 
+// Compare dotted versions ("7.15.3" vs "7.16.1"): <0, 0, >0.
+function cmpVersion(a, b) {
+  const pa = String(a).split(/[.\-]/).map((x) => parseInt(x, 10) || 0);
+  const pb = String(b).split(/[.\-]/).map((x) => parseInt(x, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d < 0 ? -1 : 1;
+  }
+  return 0;
+}
+
+// RouterOS version cell: green if >= latest stable, orange if older.
+function RosVersion({ version, latest }) {
+  if (!version) return <span className="muted">—</span>;
+  if (!latest) return <span>{version}</span>;
+  const old = cmpVersion(version, latest) < 0;
+  return (
+    <span
+      className={old ? "ros-old" : "ros-ok"}
+      title={
+        old
+          ? `Устарела — актуальная стабильная ${latest}`
+          : `Актуальная (стабильная ${latest})`
+      }
+    >
+      {version}
+    </span>
+  );
+}
+
 export default function Devices() {
   const [devices, setDevices] = useState([]);
   const [schedules, setSchedules] = useState([]);
@@ -46,6 +76,7 @@ export default function Devices() {
   const [editing, setEditing] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [filter, setFilter] = useState("");
+  const [latestRos, setLatestRos] = useState(null);
 
   const refreshDevices = useCallback(async () => {
     try {
@@ -66,6 +97,10 @@ export default function Devices() {
   useEffect(() => {
     refreshDevices();
     refreshSchedules();
+    api
+      .rosLatest()
+      .then((r) => setLatestRos(r.version || null))
+      .catch(() => {});
   }, [refreshDevices, refreshSchedules]);
 
   // live-refresh device list (online dots) every 10s without reloading page
@@ -196,7 +231,7 @@ export default function Devices() {
                       )}
                     </td>
                     <td className="mono">
-                      {d.ros_version || <span className="muted">—</span>}
+                      <RosVersion version={d.ros_version} latest={latestRos} />
                     </td>
                     <td>{d.schedule_name || <span className="muted">— ручной</span>}</td>
                     <td>

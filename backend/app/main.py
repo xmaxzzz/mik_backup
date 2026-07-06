@@ -18,6 +18,7 @@ from .routers import (
     backups,
     devices,
     health,
+    ros,
     schedules,
     settings as settings_router,
     ssh,
@@ -81,6 +82,7 @@ app.include_router(settings_router.router, prefix=api_prefix)
 app.include_router(yandex.router, prefix=api_prefix)
 app.include_router(ssh.router, prefix=api_prefix)
 app.include_router(terminal.router, prefix=api_prefix)
+app.include_router(ros.router, prefix=api_prefix)
 
 
 # --- Static SPA ---
